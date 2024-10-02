@@ -1,7 +1,13 @@
-import { Elysia } from "elysia";
+import { solanaManager } from './solanaManager';
+import { config } from "./config";
+import { Elysia } from 'elysia';
+import { initDb } from './db';
+import { initializeMangoClient } from './mango';
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
-
-console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-);
+new Elysia()
+    .use(solanaManager)
+    .listen({ hostname: config.HOST, port: config.PORT }, async ({ hostname, port }) => {
+        await initializeMangoClient();
+        initDb();
+        console.log(`Running at http://${hostname}:${port}`)
+    });
