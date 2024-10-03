@@ -16,7 +16,7 @@ export async function initializeMangoClient(): Promise<MangoClient | undefined> 
       const clientKeypair = new Keypair()
       const options = AnchorProvider.defaultOptions()
   
-      const connection = new Connection(process.env.RPC_KEY!, options)
+      const connection = new Connection(`https://mainnet.helius-rpc.com/?api-key=${process.env.RPC_KEY}`, options)
       const clientWallet = new Wallet(clientKeypair)
       const clientProvider = new AnchorProvider(connection, clientWallet, options)
   

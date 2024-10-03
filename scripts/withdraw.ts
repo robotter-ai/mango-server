@@ -3,7 +3,6 @@ import { config } from "../src/config";
 import { initializeMangoClient } from "../src/mango";
 import { USDC_MINT } from "../src/constants";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { deactivateBot } from "../src/db";
 
 const SERVER_URL = "http://localhost:3000";
 
@@ -16,7 +15,7 @@ async function withdrawBot() {
   const signer = Keypair.fromSecretKey(secretUint8Array);
   const ownerPublicKey = signer.publicKey.toBase58();
   
-  const botId = 14;
+  const botId = 1;
 
   try {
     console.log("Withdrawing bot", botId, "for owner", ownerPublicKey);
@@ -47,7 +46,6 @@ async function withdrawBot() {
 
       if (withdrawTxResponse.status === 200) {
         console.log("Withdrawal successful. Deactivating bot in database...");
-        deactivateBot(ownerPublicKey, botId);
         console.log("Bot", botId, "deactivated in database.");
       } else {
         console.log("Withdrawal failed. Bot", botId, "remains active in database.");

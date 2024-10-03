@@ -1,7 +1,6 @@
-import { Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { MangoClient } from "@blockworks-foundation/mango-v4";
+import { Keypair, VersionedTransaction } from "@solana/web3.js";
 import { config } from "../src/config";
-import { initializeMangoClient, getMangoGroup, MANGO_MAINNET_GROUP, getMangoClient } from "../src/mango";
+import { initializeMangoClient, getMangoGroup, getMangoClient } from "../src/mango";
 import { USDC_MINT } from "../src/constants";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 

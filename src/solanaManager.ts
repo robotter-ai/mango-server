@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Elysia } from "elysia";
 import { config } from "./config";
@@ -7,7 +7,9 @@ import { USDC_MINT } from "./constants";
 import { deriveMangoAccountAddress, getMangoClient, getMangoGroup, MANGO_MAINNET_GROUP } from "./mango";
 import { prepareTransaction } from "./solana/prepareTransaction";
 import { BN } from "bn.js";
-import { deactivateBot, getNextBotId } from "./db";
+import { fetchTransaction, validateTransaction } from "./solana/validateTransction";
+import { getNextBotId, saveMangoEvent } from "./db";
+import { parseTransaction } from "./solana/parser";
 
 export const solanaManager = new Elysia()
   .get('/getUserUsdcBalance', async ({ query }: { query: { user: string } }) => {
@@ -84,7 +86,6 @@ export const solanaManager = new Elysia()
     } catch (error: any) {
       console.error('Error creating deposit transaction:', error);
       if (error.message.includes("already in use")) {
-        deactivateBot(body.owner, accountNumber);
         return { message: 'Account number conflict, please try again', status: 409 };
       }
       return { message: 'error', error: error.message, status: 500 };
@@ -142,9 +143,79 @@ export const solanaManager = new Elysia()
   .post('/sendTransaction', async ({ body }: { body: { transaction: string } }) => {
     try {
       const signature = await confirmTransaction(body.transaction);
+      validateTransaction(signature); // dont await this
+
       return { signature, status: 200 };
     } catch (error: any) {
       console.error('Error sending transaction:', error);
       return { error: error.message, status: 500 };
     }
   })
+  
+  .post('/accountsListener', async ({ body, headers }) => {
+    try {
+        const authToken = headers['authorization'];
+        if (!authToken || authToken !== process.env.RPC_KEY) {
+            console.error(`Unauthorized request`);
+            return new Response(JSON.stringify({ error: "Unauthorized" }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        const signatures = (body as any).flatMap((x: any) => x.transaction.signatures);
+        const confirmationPromises = signatures.map((signature: string) => getConfirmation(signature));
+        const confirmationResults = await Promise.all(confirmationPromises);
+        const confirmedSignatures = signatures.filter((_: string, index: number) => confirmationResults[index] !== null);
+    
+        if (confirmedSignatures.length === 0) {
+          console.log('No transactions were confirmed');
+          return { success: false, message: 'No transactions were confirmed' };
+        }
+    
+        console.log(`Confirmed signatures: ${confirmedSignatures}`);
+        for (const signature of signatures) {
+          const response = await fetchTransaction(signature);
+          if (!response) throw new Error('Transaction not found');
+      
+          const { transaction: { message }, meta, blockTime } = response;
+          if (!message || !meta) throw new Error('Transaction data not found');
+      
+          const versionedTransaction = new VersionedTransaction(message);    
+          const mangoEvents = parseTransaction(versionedTransaction, signature, blockTime);
+      
+          for (const mangoEvent of mangoEvents) {
+            console.log(mangoEvent)
+            saveMangoEvent(mangoEvent);
+          }
+        }
+
+        return { success: true, message: 'Transactions processed successfully' };
+    } catch (error) {
+        console.error('Failed to process transactions:', error);
+        return { success: false, message: 'Failed to process transactions' };
+    }
+});
+
+async function getConfirmation(
+  signature: string,
+  maxRetries: number = 10,
+  retryDelay: number = 2000
+): Promise<string | null> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const result = await config.RPC.getSignatureStatus(signature, {
+          searchTransactionHistory: true,
+      });
+      const status = result.value?.confirmationStatus;
+  
+      if (status === 'confirmed' || status === 'finalized') {
+          return status;
+      }
+  
+      console.log(`Attempt ${attempt + 1}: Transaction not yet confirmed. Retrying...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+  }
+
+  console.error(`Transaction not confirmed after ${maxRetries} attempts.`);
+  return null;
+}
