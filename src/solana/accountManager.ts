@@ -1,5 +1,5 @@
 import ky from "ky";
-import { getNextBotId, addMangoAccount, deactivateMangoAccount } from "../db";
+import { getNextBotId, addMangoAccount, deactivateMangoAccount } from "../db/mangoAccounts";
 import { initializeParser } from "./parser";
 
 export class AccountManager {

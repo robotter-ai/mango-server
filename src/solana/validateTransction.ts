@@ -1,8 +1,9 @@
 import { VersionedTransaction } from '@solana/web3.js';
 import { config } from '../config';
-import { saveMangoEvent, getAllActiveMangoAccounts } from '../db';
+import { getAllActiveMangoAccounts } from '../db/mangoAccounts';
 import { AccountManager } from './accountManager';
 import { parseTransaction } from './parser';
+import { saveMangoEvent } from '../db/mangoEvents';
 
 const mangoAccountManager = await AccountManager.getInstance();
 

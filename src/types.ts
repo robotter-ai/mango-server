@@ -1,4 +1,4 @@
-export type MangoEventType = 'tokenDeposit' | 'tokenWithdraw' | 'perpTrade' | 'spotTrade' | 'tokenConditionalSwap' | 'liquidation';
+export type MangoEventType = 'tokenDeposit' | 'tokenWithdraw' | 'perpTrade' | 'spotTrade' | 'tokenConditionalSwap' | 'liquidation' | 'perpPlaceOrder' | 'perpSettlePnl' | 'perpSettleFees' | 'perpForceClosePosition';
 
 export interface BaseMangoEvent {
     signature: string;
@@ -75,4 +75,68 @@ export interface LiquidationEvent extends BaseMangoEvent {
     maxLiabTransfer: string;
 }
 
-export type MangoEvent = DepositEvent | WithdrawEvent | TradeEvent | SwapEvent | LiquidationEvent;
+export interface PerpPlaceOrderEvent extends BaseMangoEvent {
+    eventType: 'perpPlaceOrder';
+    perpMarket: string;
+    side: 'buy' | 'sell';
+    price: string;
+    quantity: string;
+    clientOrderId: string;
+    orderType: string;
+    reduceOnly: boolean;
+    token: string;
+    owner: string;
+    maxBaseQuantity: string;
+    maxQuoteQuantity: string;
+    expiryTimestamp: string;
+    limit: string;
+}
+
+export interface PerpSettlePnlEvent extends BaseMangoEvent {
+    eventType: 'perpSettlePnl';
+    perpMarket: string;
+    token: string;
+    accountA: string;
+    accountB: string;
+}
+
+export interface PerpSettleFeesEvent extends BaseMangoEvent {
+    eventType: 'perpSettleFees';
+    perpMarket: string;
+    token: string;
+    feeAccount: string;
+}
+
+export interface PerpForceClosePositionEvent extends BaseMangoEvent {
+    eventType: 'perpForceClosePosition';
+    perpMarket: string;
+    token: string;
+    liqor: string;
+    liqorOwner: string;
+    baseTransfer: string;
+}
+
+export type MangoEvent = DepositEvent | WithdrawEvent | TradeEvent | SwapEvent | LiquidationEvent | PerpPlaceOrderEvent | PerpSettlePnlEvent | PerpSettleFeesEvent | PerpForceClosePositionEvent;
+
+export interface BotData {
+    id: number;
+    name: string;
+    status: 'Active' | 'Stopped';
+    mangoAccount: string; 
+    pnl: {
+      value: number;
+      percentage: number;
+      isPositive: boolean;
+      chartData: number[];
+    };
+    portfolio: number;
+    accuracy: number;
+    sharpeRatio: number;
+    apr: number;
+    delegate: string;
+    events: {
+      event_category: 'deposit' | 'withdraw' | 'trade';
+      timestamp: string;
+      [key: string]: any;
+    }[];
+}

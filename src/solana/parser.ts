@@ -1,6 +1,6 @@
 import { MessageCompiledInstruction, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { getMangoClient, getMangoGroup, initializeMangoClient } from '../mango';
-import { DepositEvent, LiquidationEvent, MangoEvent, SwapEvent, TradeEvent, WithdrawEvent } from '../types';
+import { DepositEvent, LiquidationEvent, MangoEvent, PerpForceClosePositionEvent, PerpPlaceOrderEvent, PerpSettleFeesEvent, PerpSettlePnlEvent, SwapEvent, TradeEvent, WithdrawEvent } from '../types';
 import { BorshInstructionCoder } from "@coral-xyz/anchor";
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes';
 
@@ -42,15 +42,17 @@ export function parseTransaction(transaction: VersionedTransaction, signature: s
                     event = handleWithdraw(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
                     break;
                 case 'perpPlaceOrder':
-                    event = handlePerpTrade(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                case 'perpPlaceOrderV2':
+                    event = handlePerpPlaceOrder(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
                     break;
-                case 'tokenConditionalSwapTrigger':
-                    event = handleTokenSwap(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                case 'perpSettlePnl':
+                    event = handlePerpSettlePnl(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
                     break;
-                case 'liquidateTokenAndToken':
-                case 'liquidateTokenAndPerp':
-                case 'liquidatePerpMarket':
-                    event = handleLiquidation(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                case 'perpSettleFees':
+                    event = handlePerpSettleFees(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                    break;
+                case 'perpForceClosePosition':
+                    event = handlePerpForceClosePosition(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
                     break;
                 default:
                     console.log(decodedIx.name);
@@ -125,6 +127,129 @@ function handleWithdraw(
         bank: bank.toBase58(),
         vault: vault.toBase58(),
         tokenAccount: tokenAccount.toBase58(),
+    };
+}
+
+function handlePerpPlaceOrder(
+    decodedIx: any,
+    ix: any,
+    signature: string,
+    blockTime: number | null | undefined,
+    signers: string[],
+    staticAccountKeys: PublicKey[]
+): PerpPlaceOrderEvent {
+    const { accountKeyIndexes } = ix;
+    const accounts = accountKeyIndexes.map((index: number) => staticAccountKeys[index]);
+    const [group, mangoAccount, owner, perpMarket] = accounts;
+    const { side, price, quantity, maxBaseQuantity, maxQuoteQuantity, clientOrderId, orderType, reduceOnly, expiryTimestamp, limit } = decodedIx.data;
+    const timestamp = blockTime ? blockTime * 1000 : Date.now();
+    const token = getPerpMarketSymbol(perpMarket.toBase58());
+
+    return {
+        signature,
+        eventType: 'perpPlaceOrder',
+        mangoAccount: mangoAccount.toBase58(),
+        timestamp,
+        groupPubkey: group.toBase58(),
+        signers,
+        perpMarket: perpMarket.toBase58(),
+        side: side === 0 ? 'buy' : 'sell',
+        price: price.toString(),
+        quantity: quantity.toString(),
+        clientOrderId: clientOrderId.toString(),
+        orderType,
+        reduceOnly,
+        token,
+        owner: owner.toBase58(),
+        maxBaseQuantity: maxBaseQuantity.toString(),
+        maxQuoteQuantity: maxQuoteQuantity.toString(),
+        expiryTimestamp: expiryTimestamp.toString(),
+        limit: limit.toString(),
+    };
+}
+
+function handlePerpSettlePnl(
+    decodedIx: any,
+    ix: any,
+    signature: string,
+    blockTime: number | null | undefined,
+    signers: string[],
+    staticAccountKeys: PublicKey[]
+): PerpSettlePnlEvent {
+    const { accountKeyIndexes } = ix;
+    const accounts = accountKeyIndexes.map((index: number) => staticAccountKeys[index]);
+    const [group, mangoAccount, perpMarket, accountA, accountB, oracle] = accounts;
+    const timestamp = blockTime ? blockTime * 1000 : Date.now();
+    const token = getPerpMarketSymbol(perpMarket.toBase58());
+
+    return {
+        signature,
+        eventType: 'perpSettlePnl',
+        mangoAccount: mangoAccount.toBase58(),
+        timestamp,
+        groupPubkey: group.toBase58(),
+        signers,
+        perpMarket: perpMarket.toBase58(),
+        token,
+        accountA: accountA.toBase58(),
+        accountB: accountB.toBase58(),
+    };
+}
+
+function handlePerpSettleFees(
+    decodedIx: any,
+    ix: any,
+    signature: string,
+    blockTime: number | null | undefined,
+    signers: string[],
+    staticAccountKeys: PublicKey[]
+): PerpSettleFeesEvent {
+    const { accountKeyIndexes } = ix;
+    const accounts = accountKeyIndexes.map((index: number) => staticAccountKeys[index]);
+    const [group, mangoAccount, perpMarket, feeAccount] = accounts;
+    const timestamp = blockTime ? blockTime * 1000 : Date.now();
+    const token = getPerpMarketSymbol(perpMarket.toBase58());
+
+    return {
+        signature,
+        eventType: 'perpSettleFees',
+        mangoAccount: mangoAccount.toBase58(),
+        timestamp,
+        groupPubkey: group.toBase58(),
+        signers,
+        perpMarket: perpMarket.toBase58(),
+        token,
+        feeAccount: feeAccount.toBase58(),
+    };
+}
+
+function handlePerpForceClosePosition(
+    decodedIx: any,
+    ix: any,
+    signature: string,
+    blockTime: number | null | undefined,
+    signers: string[],
+    staticAccountKeys: PublicKey[]
+): PerpForceClosePositionEvent {
+    const { accountKeyIndexes } = ix;
+    const accounts = accountKeyIndexes.map((index: number) => staticAccountKeys[index]);
+    const [group, mangoAccount, perpMarket, oracle, liqor, liqorOwner] = accounts;
+    const { baseTransfer } = decodedIx.data;
+    const timestamp = blockTime ? blockTime * 1000 : Date.now();
+    const token = getPerpMarketSymbol(perpMarket.toBase58());
+
+    return {
+        signature,
+        eventType: 'perpForceClosePosition',
+        mangoAccount: mangoAccount.toBase58(),
+        timestamp,
+        groupPubkey: group.toBase58(),
+        signers,
+        perpMarket: perpMarket.toBase58(),
+        token,
+        liqor: liqor.toBase58(),
+        liqorOwner: liqorOwner.toBase58(),
+        baseTransfer: baseTransfer.toString(),
     };
 }
 

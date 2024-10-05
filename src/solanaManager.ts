@@ -8,8 +8,10 @@ import { deriveMangoAccountAddress, getMangoClient, getMangoGroup, MANGO_MAINNET
 import { prepareTransaction } from "./solana/prepareTransaction";
 import { BN } from "bn.js";
 import { fetchTransaction, validateTransaction } from "./solana/validateTransction";
-import { getNextBotId, saveMangoEvent } from "./db";
 import { parseTransaction } from "./solana/parser";
+import { getUserBotsData } from "./db/botStats";
+import { getNextBotId } from "./db/mangoAccounts";
+import { saveMangoEvent } from "./db/mangoEvents";
 
 export const solanaManager = new Elysia()
   .get('/getUserUsdcBalance', async ({ query }: { query: { user: string } }) => {
@@ -29,6 +31,25 @@ export const solanaManager = new Elysia()
     }
   })
 
+  .get('/getBotData', async ({ query }: { query: { userAddress: string } }) => {
+    try {
+      const { userAddress } = query;
+      if (!userAddress) {
+        return { error: 'User address is required', status: 400 };
+      }
+
+      const userBotsData = getUserBotsData(userAddress);
+      if (!userBotsData) {
+        return { error: 'No active bots found for this user', status: 404 };
+      }
+
+      return { data: userBotsData, status: 200 };
+    } catch (error: any) {
+      console.error('Error fetching user bots and events:', error);
+      return { error: error.message, status: 500 };
+    }
+  })
+
   // note: amount without decimals
   .post('/deposit', async ({ body }: { body: { owner: string, amount: number, delegate: string } }) => {
     const { owner, amount, delegate } = body;
@@ -43,7 +64,7 @@ export const solanaManager = new Elysia()
 
     try {
       const createAccountIx = await mangoClient.program.methods
-        .accountCreate(accountNumber, 8, 4, 4, 32, '')
+        .accountCreate(accountNumber, 4, 4, 4, 32, '')
         .accounts({
           account: mangoAccount,
           group: MANGO_MAINNET_GROUP,
@@ -82,7 +103,7 @@ export const solanaManager = new Elysia()
       const instructions = [createAccountIx, depositIx, setDelegateIx];
       const transaction = await prepareTransaction(instructions, ownerPubkey);
 
-      return { transaction, botId: accountNumber, status: 200 };
+      return { transaction, botId: accountNumber, mangoAccount: mangoAccount.toBase58(), status: 200 };
     } catch (error: any) {
       console.error('Error creating deposit transaction:', error);
       if (error.message.includes("already in use")) {

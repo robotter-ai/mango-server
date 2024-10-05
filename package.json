@@ -8,6 +8,7 @@
   "dependencies": {
     "@blockworks-foundation/mango-v4": "^0.33.5",
     "@coral-xyz/anchor": "^0.29.0",
+    "@elysiajs/cors": "^1.1.1",
     "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.91.8",
     "aleph-sdk-ts": "^3.9.2",
