@@ -1,5 +1,3 @@
-export type MangoEventType = 'tokenDeposit' | 'tokenWithdraw' | 'perpTrade' | 'spotTrade' | 'tokenConditionalSwap' | 'liquidation' | 'perpPlaceOrder' | 'perpSettlePnl' | 'perpSettleFees' | 'perpForceClosePosition';
-
 export interface BaseMangoEvent {
     signature: string;
     eventType: MangoEventType;
@@ -116,7 +114,88 @@ export interface PerpForceClosePositionEvent extends BaseMangoEvent {
     baseTransfer: string;
 }
 
-export type MangoEvent = DepositEvent | WithdrawEvent | TradeEvent | SwapEvent | LiquidationEvent | PerpPlaceOrderEvent | PerpSettlePnlEvent | PerpSettleFeesEvent | PerpForceClosePositionEvent;
+export interface PerpCancelOrderEvent extends BaseMangoEvent {
+    eventType: 'perpCancelOrder';
+    perpMarket: string;
+    orderId: string;
+    clientOrderId: string;
+    token: string;
+    owner: string;
+}
+
+export interface PerpCancelAllOrdersEvent extends BaseMangoEvent {
+    eventType: 'perpCancelAllOrders';
+    perpMarket: string;
+    limit: string;
+    token: string;
+    owner: string;
+}
+
+export interface PerpFillEvent extends BaseMangoEvent {
+    eventType: 'perpFill';
+    perpMarket: string;
+    maker: string;
+    taker: string;
+    makerOrderId: string;
+    takerOrderId: string;
+    makerFee: string;
+    takerFee: string;
+    price: string;
+    quantity: string;
+    token: string;
+}
+
+export type MangoEventType = 'tokenDeposit' | 'tokenWithdraw' | 'perpTrade' | 'spotTrade' | 'tokenConditionalSwap' | 'liquidation' | 'perpPlaceOrder' | 'perpSettlePnl' | 'perpSettleFees' | 'perpForceClosePosition' | 'perpCancelOrder' | 'perpCancelAllOrders' | 'perpFill';
+
+export type MangoEvent = DepositEvent | WithdrawEvent | TradeEvent | SwapEvent | LiquidationEvent | PerpPlaceOrderEvent | PerpSettlePnlEvent | PerpSettleFeesEvent | PerpForceClosePositionEvent | PerpCancelOrderEvent | PerpCancelAllOrdersEvent | PerpFillEvent;
+
+export function isDepositEvent(event: MangoEvent): event is DepositEvent {
+  return event.eventType === 'tokenDeposit';
+}
+
+export function isWithdrawEvent(event: MangoEvent): event is WithdrawEvent {
+  return event.eventType === 'tokenWithdraw';
+}
+
+export function isTradeEvent(event: MangoEvent): event is TradeEvent {
+  return event.eventType === 'perpTrade' || event.eventType === 'spotTrade';
+}
+
+export function isSwapEvent(event: MangoEvent): event is SwapEvent {
+  return event.eventType === 'tokenConditionalSwap';
+}
+
+export function isLiquidationEvent(event: MangoEvent): event is LiquidationEvent {
+  return event.eventType === 'liquidation';
+}
+
+export function isPerpPlaceOrderEvent(event: MangoEvent): event is PerpPlaceOrderEvent {
+  return event.eventType === 'perpPlaceOrder';
+}
+
+export function isPerpSettlePnlEvent(event: MangoEvent): event is PerpSettlePnlEvent {
+  return event.eventType === 'perpSettlePnl';
+}
+
+export function isPerpSettleFeesEvent(event: MangoEvent): event is PerpSettleFeesEvent {
+  return event.eventType === 'perpSettleFees';
+}
+
+export function isPerpForceClosePositionEvent(event: MangoEvent): event is PerpForceClosePositionEvent {
+  return event.eventType === 'perpForceClosePosition';
+}
+
+export function isPerpCancelOrderEvent(event: MangoEvent): event is PerpCancelOrderEvent {
+  return event.eventType === 'perpCancelOrder';
+}
+
+export function isPerpCancelAllOrdersEvent(event: MangoEvent): event is PerpCancelAllOrdersEvent {
+  return event.eventType === 'perpCancelAllOrders';
+}
+
+export function isPerpFillEvent(event: MangoEvent): event is PerpFillEvent {
+  return event.eventType === 'perpFill';
+}
 
 export interface BotData {
     id: number;

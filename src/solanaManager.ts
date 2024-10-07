@@ -206,7 +206,7 @@ export const solanaManager = new Elysia()
           const mangoEvents = parseTransaction(versionedTransaction, signature, blockTime);
       
           for (const mangoEvent of mangoEvents) {
-            console.log(mangoEvent)
+            console.log('mangoEvent from accountListener', mangoEvent)
             saveMangoEvent(mangoEvent);
           }
         }

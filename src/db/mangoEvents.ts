@@ -1,88 +1,176 @@
-import { MangoEvent, DepositEvent, WithdrawEvent, TradeEvent, SwapEvent, LiquidationEvent, PerpPlaceOrderEvent, PerpSettlePnlEvent, PerpSettleFeesEvent, PerpForceClosePositionEvent } from '../types';
+import { MangoEvent, DepositEvent, WithdrawEvent, TradeEvent, SwapEvent, LiquidationEvent, PerpPlaceOrderEvent, PerpSettlePnlEvent, PerpSettleFeesEvent, PerpForceClosePositionEvent, PerpCancelOrderEvent, PerpCancelAllOrdersEvent, PerpFillEvent, isLiquidationEvent, isPerpCancelAllOrdersEvent, isPerpCancelOrderEvent, isPerpFillEvent, isPerpForceClosePositionEvent, isPerpPlaceOrderEvent, isPerpSettleFeesEvent, isPerpSettlePnlEvent, isSwapEvent, isTradeEvent, isWithdrawEvent, isDepositEvent } from '../types';
 import db from './index';
 
 export function saveMangoEvent(event: MangoEvent) {
-  return db.transaction(() => {
-    let eventId: number;
-
-    switch (event.eventType) {
-        case 'tokenDeposit':
-        case 'tokenWithdraw':
-          eventId = saveDepositWithdrawEvent(event);
-          break;
-        case 'perpTrade':
-        case 'spotTrade':
-          eventId = saveTradeEvent(event);
-          break;
-        case 'tokenConditionalSwap':
-          eventId = saveSwapEvent(event);
-          break;
-        case 'liquidation':
-          eventId = saveLiquidationEvent(event);
-          break;
-        case 'perpPlaceOrder':
-          eventId = savePerpPlaceOrderEvent(event);
-          break;
-        case 'perpSettlePnl':
-          eventId = savePerpSettlePnlEvent(event);
-          break;
-        case 'perpSettleFees':
-          eventId = savePerpSettleFeesEvent(event);
-          break;
-        case 'perpForceClosePosition':
-          eventId = savePerpForceClosePositionEvent(event);
-          break;
-        default:
-          throw new Error(`Unknown event type: ${(event as any).eventType}`);
+    db.transaction(() => {
+      if (isDepositEvent(event) || isWithdrawEvent(event)) {
+        saveDepositWithdrawEvent(event);
+      } else if (isTradeEvent(event)) {
+        saveTradeEvent(event);
+      } else if (isSwapEvent(event)) {
+        saveSwapEvent(event);
+      } else if (isLiquidationEvent(event)) {
+        saveLiquidationEvent(event);
+      } else if (isPerpPlaceOrderEvent(event)) {
+        savePerpPlaceOrderEvent(event);
+      } else if (isPerpSettlePnlEvent(event)) {
+        savePerpSettlePnlEvent(event);
+      } else if (isPerpSettleFeesEvent(event)) {
+        savePerpSettleFeesEvent(event);
+      } else if (isPerpForceClosePositionEvent(event)) {
+        savePerpForceClosePositionEvent(event);
+      } else if (isPerpCancelOrderEvent(event)) {
+        savePerpCancelOrderEvent(event);
+      } else if (isPerpCancelAllOrdersEvent(event)) {
+        savePerpCancelAllOrdersEvent(event);
+      } else if (isPerpFillEvent(event)) {
+        savePerpFillEvent(event);
+      } else {
+        console.error('Unknown event type:', event);
       }
+    })();
+  }
 
+export function getEventsByMangoAccount(mangoAccount: string): MangoEvent[] {
+    const deposits = getDepositWithdrawEventsByMangoAccount(mangoAccount);
+    const trades = getTradeEventsByMangoAccount(mangoAccount);
+    const swaps = getSwapEventsByMangoAccount(mangoAccount);
+    const liquidations = getLiquidationEventsByMangoAccount(mangoAccount);
+    const perpCancelOrders = getPerpCancelOrderEventsByMangoAccount(mangoAccount);
+    const perpCancelAllOrders = getPerpCancelAllOrdersEventsByMangoAccount(mangoAccount);
+    const perpFills = getPerpFillEventsByMangoAccount(mangoAccount);
+  
+    return [...deposits, ...trades, ...swaps, ...liquidations, ...perpCancelOrders, ...perpCancelAllOrders, ...perpFills].sort((a, b) => b.timestamp - a.timestamp);
+}
+
+function getDepositWithdrawEventsByMangoAccount(mangoAccount: string): (DepositEvent | WithdrawEvent)[] {
     const stmt = db.prepare(`
-      INSERT INTO mango_events (
-        signature, event_type, mango_account, timestamp, group_pubkey, signers, event_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      SELECT * FROM deposit_withdraw_events
+      WHERE mango_account = ?
     `);
+    const events = stmt.all(mangoAccount) as (DepositEvent | WithdrawEvent)[];
+    return events.map(event => ({
+      ...event,
+      signers: JSON.parse(event.signers.toString()),
+    }));
+  }
 
-    stmt.run(
+  function getTradeEventsByMangoAccount(mangoAccount: string): TradeEvent[] {
+    const stmt = db.prepare(`
+      SELECT * FROM trade_events
+      WHERE mango_account = ?
+    `);
+    const events = stmt.all(mangoAccount) as TradeEvent[];
+    return events.map(event => ({
+      ...event,
+      signers: JSON.parse(event.signers.toString()),
+      reduceOnly: Boolean(event.reduceOnly),
+    }));
+  }
+
+  function getSwapEventsByMangoAccount(mangoAccount: string): SwapEvent[] {
+    const stmt = db.prepare(`
+      SELECT * FROM swap_events
+      WHERE mango_account = ?
+    `);
+    const events = stmt.all(mangoAccount) as SwapEvent[];
+    return events.map(event => ({
+      ...event,
+      signers: JSON.parse(event.signers.toString()),
+    }));
+  }
+
+  function getLiquidationEventsByMangoAccount(mangoAccount: string): LiquidationEvent[] {
+  const stmt = db.prepare(`
+    SELECT * FROM liquidation_events
+    WHERE mango_account = ?
+  `);
+  const events = stmt.all(mangoAccount) as LiquidationEvent[];
+  return events.map(event => ({
+    ...event,
+    signers: JSON.parse(event.signers.toString()),
+  }));
+}
+
+function getPerpCancelOrderEventsByMangoAccount(mangoAccount: string): PerpCancelOrderEvent[] {
+    const stmt = db.prepare(`
+      SELECT * FROM perp_cancel_order_events
+      WHERE mango_account = ?
+    `);
+    const events = stmt.all(mangoAccount) as PerpCancelOrderEvent[];
+    return events.map(event => ({
+      ...event,
+      signers: JSON.parse(event.signers.toString()),
+    }));
+  }
+
+  function getPerpCancelAllOrdersEventsByMangoAccount(mangoAccount: string): PerpCancelAllOrdersEvent[] {
+    const stmt = db.prepare(`
+      SELECT * FROM perp_cancel_all_orders_events
+      WHERE mango_account = ?
+    `);
+    const events = stmt.all(mangoAccount) as PerpCancelAllOrdersEvent[];
+    return events.map(event => ({
+      ...event,
+      signers: JSON.parse(event.signers.toString()),
+    }));
+  }
+
+  function getPerpFillEventsByMangoAccount(mangoAccount: string): PerpFillEvent[] {
+    const stmt = db.prepare(`
+      SELECT * FROM perp_fill_events
+      WHERE mango_account = ?
+    `);
+    const events = stmt.all(mangoAccount) as PerpFillEvent[];
+    return events.map(event => ({
+      ...event,
+      signers: JSON.parse(event.signers.toString()),
+    }));
+  }
+
+function saveDepositWithdrawEvent(event: DepositEvent | WithdrawEvent): number {
+    const stmt = db.prepare(`
+      INSERT INTO deposit_withdraw_events (
+        signature, event_type, mango_account, timestamp, group_pubkey, signers,
+        amount, token, owner, bank, vault, token_account
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+  
+    const result = stmt.run(
       event.signature,
       event.eventType,
       event.mangoAccount,
       event.timestamp,
       event.groupPubkey,
       JSON.stringify(event.signers),
-      eventId
+      event.amount,
+      event.token,
+      event.owner,
+      event.bank,
+      event.vault,
+      event.tokenAccount
     );
-  })();
-}
+  
+    return result.lastInsertRowid as number;
+  }
 
-function saveDepositWithdrawEvent(event: DepositEvent | WithdrawEvent): number {
-  const stmt = db.prepare(`
-    INSERT INTO deposit_withdraw_events (
-      amount, token, owner, bank, vault, token_account
-    ) VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  const result = stmt.run(
-    event.amount,
-    event.token,
-    event.owner,
-    event.bank,
-    event.vault,
-    event.tokenAccount
-  );
-
-  return result.lastInsertRowid as number;
-}
-
-function saveTradeEvent(event: TradeEvent): number {
+  function saveTradeEvent(event: TradeEvent): number {
     const stmt = db.prepare(`
       INSERT INTO trade_events (
+        signature, event_type, mango_account, timestamp, group_pubkey, signers,
         perp_market, serum_market, side, price, quantity, client_order_id, order_type,
         reduce_only, token, owner, max_base_quantity, max_quote_quantity, expiry_timestamp,
         "limit", open_orders, self_trade_behavior
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   
     const result = stmt.run(
+      event.signature,
+      event.eventType,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      JSON.stringify(event.signers),
       event.perpMarket || null,
       event.serumMarket || null,
       event.side,
@@ -107,12 +195,19 @@ function saveTradeEvent(event: TradeEvent): number {
   function savePerpPlaceOrderEvent(event: PerpPlaceOrderEvent): number {
     const stmt = db.prepare(`
       INSERT INTO perp_place_order_events (
+        signature, event_type, mango_account, timestamp, group_pubkey, signers,
         perp_market, side, price, quantity, client_order_id, order_type,
         reduce_only, token, owner, max_base_quantity, max_quote_quantity, expiry_timestamp, "limit"
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   
     const result = stmt.run(
+      event.signature,
+      event.eventType,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      JSON.stringify(event.signers),
       event.perpMarket,
       event.side,
       event.price,
@@ -134,11 +229,18 @@ function saveTradeEvent(event: TradeEvent): number {
   function savePerpSettlePnlEvent(event: PerpSettlePnlEvent): number {
     const stmt = db.prepare(`
       INSERT INTO perp_settle_pnl_events (
+        signature, event_type, mango_account, timestamp, group_pubkey, signers,
         perp_market, token, account_a, account_b
-      ) VALUES (?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   
     const result = stmt.run(
+      event.signature,
+      event.eventType,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      JSON.stringify(event.signers),
       event.perpMarket,
       event.token,
       event.accountA,
@@ -151,11 +253,18 @@ function saveTradeEvent(event: TradeEvent): number {
   function savePerpSettleFeesEvent(event: PerpSettleFeesEvent): number {
     const stmt = db.prepare(`
       INSERT INTO perp_settle_fees_events (
+        signature, event_type, mango_account, timestamp, group_pubkey, signers,
         perp_market, token, fee_account
-      ) VALUES (?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   
     const result = stmt.run(
+      event.signature,
+      event.eventType,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      JSON.stringify(event.signers),
       event.perpMarket,
       event.token,
       event.feeAccount
@@ -167,11 +276,18 @@ function saveTradeEvent(event: TradeEvent): number {
   function savePerpForceClosePositionEvent(event: PerpForceClosePositionEvent): number {
     const stmt = db.prepare(`
       INSERT INTO perp_force_close_position_events (
+        signature, event_type, mango_account, timestamp, group_pubkey, signers,
         perp_market, token, liqor, liqor_owner, base_transfer
-      ) VALUES (?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   
     const result = stmt.run(
+      event.signature,
+      event.eventType,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      JSON.stringify(event.signers),
       event.perpMarket,
       event.token,
       event.liqor,
@@ -228,28 +344,73 @@ function saveLiquidationEvent(event: LiquidationEvent): number {
   return result.lastInsertRowid as number;
 }
 
-export function getEventsByMangoAccount(mangoAccount: string): MangoEvent[] {
-    const query = db.prepare(`
-      SELECT me.*, 
-             dwe.*, te.*, se.*, le.*,
-             ppoe.*, pspe.*, psfe.*, pfcpe.*
-      FROM mango_events me
-      LEFT JOIN deposit_withdraw_events dwe ON me.event_id = dwe.id AND me.event_type IN ('tokenDeposit', 'tokenWithdraw')
-      LEFT JOIN trade_events te ON me.event_id = te.id AND me.event_type IN ('perpTrade', 'spotTrade')
-      LEFT JOIN swap_events se ON me.event_id = se.id AND me.event_type = 'tokenConditionalSwap'
-      LEFT JOIN liquidation_events le ON me.event_id = le.id AND me.event_type = 'liquidation'
-      LEFT JOIN perp_place_order_events ppoe ON me.event_id = ppoe.id AND me.event_type = 'perpPlaceOrder'
-      LEFT JOIN perp_settle_pnl_events pspe ON me.event_id = pspe.id AND me.event_type = 'perpSettlePnl'
-      LEFT JOIN perp_settle_fees_events psfe ON me.event_id = psfe.id AND me.event_type = 'perpSettleFees'
-      LEFT JOIN perp_force_close_position_events pfcpe ON me.event_id = pfcpe.id AND me.event_type = 'perpForceClosePosition'
-      WHERE me.mango_account = ?
-      ORDER BY me.timestamp DESC
+function savePerpCancelOrderEvent(event: PerpCancelOrderEvent) {
+    const stmt = db.prepare(`
+      INSERT OR IGNORE INTO perp_cancel_order_events (
+        signature, mango_account, timestamp, group_pubkey, perp_market, order_id,
+        client_order_id, token, owner, signers
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    
-    const events = query.all(mangoAccount) as any[];
-    return events.map(event => ({
-      ...event,
-      signers: JSON.parse(event.signers),
-      reduceOnly: Boolean(event.reduce_only),
-    }));
+  
+    stmt.run(
+      event.signature,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      event.perpMarket,
+      event.orderId,
+      event.clientOrderId,
+      event.token,
+      event.owner,
+      JSON.stringify(event.signers)
+    );
+  }
+  
+  function savePerpCancelAllOrdersEvent(event: PerpCancelAllOrdersEvent) {
+    const stmt = db.prepare(`
+      INSERT OR IGNORE INTO perp_cancel_all_orders_events (
+        signature, mango_account, timestamp, group_pubkey, perp_market, limit,
+        token, owner, signers
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+  
+    stmt.run(
+      event.signature,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      event.perpMarket,
+      event.limit,
+      event.token,
+      event.owner,
+      JSON.stringify(event.signers)
+    );
+  }
+  
+  function savePerpFillEvent(event: PerpFillEvent) {
+    const stmt = db.prepare(`
+      INSERT OR IGNORE INTO perp_fill_events (
+        signature, mango_account, timestamp, group_pubkey, perp_market, maker,
+        taker, maker_order_id, taker_order_id, maker_fee, taker_fee, price,
+        quantity, token, signers
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+  
+    stmt.run(
+      event.signature,
+      event.mangoAccount,
+      event.timestamp,
+      event.groupPubkey,
+      event.perpMarket,
+      event.maker,
+      event.taker,
+      event.makerOrderId,
+      event.takerOrderId,
+      event.makerFee,
+      event.takerFee,
+      event.price,
+      event.quantity,
+      event.token,
+      JSON.stringify(event.signers)
+    );
 }

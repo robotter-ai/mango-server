@@ -23,6 +23,7 @@ async function testWithdrawSDK() {
 
     const mangoAccounts = await mangoClient.getMangoAccountsForOwner(mangoGroup, ownerPublicKey);
 
+    console.log('Found', mangoAccounts.length, 'mango accounts');
     for (const mangoAccount of mangoAccounts) {
       console.log(`\nProcessing Mango account: ${mangoAccount.publicKey.toBase58()}`);
 

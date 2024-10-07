@@ -18,7 +18,6 @@ export async function validateTransaction(signature: string): Promise<void> {
     const mangoEvents = parseTransaction(versionedTransaction, signature, blockTime);
 
     for (const mangoEvent of mangoEvents) {
-        console.log(mangoEvent)
         saveMangoEvent(mangoEvent);
 
         const mangoAccount = mangoEvent.mangoAccount;

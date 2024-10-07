@@ -1,6 +1,6 @@
 import { MessageCompiledInstruction, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { getMangoClient, getMangoGroup, initializeMangoClient } from '../mango';
-import { DepositEvent, LiquidationEvent, MangoEvent, PerpForceClosePositionEvent, PerpPlaceOrderEvent, PerpSettleFeesEvent, PerpSettlePnlEvent, SwapEvent, TradeEvent, WithdrawEvent } from '../types';
+import { DepositEvent, LiquidationEvent, MangoEvent, PerpCancelAllOrdersEvent, PerpCancelOrderEvent, PerpFillEvent, PerpForceClosePositionEvent, PerpPlaceOrderEvent, PerpSettleFeesEvent, PerpSettlePnlEvent, SwapEvent, TradeEvent, WithdrawEvent } from '../types';
 import { BorshInstructionCoder } from "@coral-xyz/anchor";
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes';
 
@@ -41,6 +41,7 @@ export function parseTransaction(transaction: VersionedTransaction, signature: s
                 case 'tokenWithdraw':
                     event = handleWithdraw(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
                     break;
+
                 case 'perpPlaceOrder':
                 case 'perpPlaceOrderV2':
                     event = handlePerpPlaceOrder(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
@@ -53,6 +54,19 @@ export function parseTransaction(transaction: VersionedTransaction, signature: s
                     break;
                 case 'perpForceClosePosition':
                     event = handlePerpForceClosePosition(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                    break;
+
+                case 'perpPlaceOrderV2':
+                    event = handlePerpPlaceOrder(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                    break;
+                case 'perpCancelOrder':
+                    event = handlePerpCancelOrder(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                    break;
+                case 'perpCancelAllOrders':
+                    event = handlePerpCancelAllOrders(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
+                    break;
+                case 'perpFill':
+                    event = handlePerpFill(decodedIx, ix, signature, blockTime, signers, transaction.message.staticAccountKeys);
                     break;
                 default:
                     console.log(decodedIx.name);
@@ -250,6 +264,100 @@ function handlePerpForceClosePosition(
         liqor: liqor.toBase58(),
         liqorOwner: liqorOwner.toBase58(),
         baseTransfer: baseTransfer.toString(),
+    };
+}
+
+function handlePerpCancelOrder(
+    decodedIx: any,
+    ix: any,
+    signature: string,
+    blockTime: number | null | undefined,
+    signers: string[],
+    staticAccountKeys: PublicKey[]
+): PerpCancelOrderEvent {
+    const { accountKeyIndexes } = ix;
+    const accounts = accountKeyIndexes.map((index: number) => staticAccountKeys[index]);
+    const [group, mangoAccount, owner, perpMarket] = accounts;
+    const { orderId, clientOrderId } = decodedIx.data;
+    const timestamp = blockTime ? blockTime * 1000 : Date.now();
+    const token = getPerpMarketSymbol(perpMarket.toBase58());
+
+    return {
+        signature,
+        eventType: 'perpCancelOrder',
+        mangoAccount: mangoAccount.toBase58(),
+        timestamp,
+        groupPubkey: group.toBase58(),
+        signers,
+        perpMarket: perpMarket.toBase58(),
+        orderId: orderId.toString(),
+        clientOrderId: clientOrderId.toString(),
+        token,
+        owner: owner.toBase58(),
+    };
+}
+
+function handlePerpCancelAllOrders(
+    decodedIx: any,
+    ix: any,
+    signature: string,
+    blockTime: number | null | undefined,
+    signers: string[],
+    staticAccountKeys: PublicKey[]
+): PerpCancelAllOrdersEvent {
+    const { accountKeyIndexes } = ix;
+    const accounts = accountKeyIndexes.map((index: number) => staticAccountKeys[index]);
+    const [group, mangoAccount, owner, perpMarket] = accounts;
+    const { limit } = decodedIx.data;
+    const timestamp = blockTime ? blockTime * 1000 : Date.now();
+    const token = getPerpMarketSymbol(perpMarket.toBase58());
+
+    return {
+        signature,
+        eventType: 'perpCancelAllOrders',
+        mangoAccount: mangoAccount.toBase58(),
+        timestamp,
+        groupPubkey: group.toBase58(),
+        signers,
+        perpMarket: perpMarket.toBase58(),
+        limit: limit.toString(),
+        token,
+        owner: owner.toBase58(),
+    };
+}
+
+function handlePerpFill(
+    decodedIx: any,
+    ix: any,
+    signature: string,
+    blockTime: number | null | undefined,
+    signers: string[],
+    staticAccountKeys: PublicKey[]
+): PerpFillEvent {
+    const { accountKeyIndexes } = ix;
+    const accounts = accountKeyIndexes.map((index: number) => staticAccountKeys[index]);
+    const [group, mangoAccount, perpMarket, maker, taker] = accounts;
+    const { makerOrderId, takerOrderId, makerFee, takerFee, price, quantity } = decodedIx.data;
+    const timestamp = blockTime ? blockTime * 1000 : Date.now();
+    const token = getPerpMarketSymbol(perpMarket.toBase58());
+
+    return {
+        signature,
+        eventType: 'perpFill',
+        mangoAccount: mangoAccount.toBase58(),
+        timestamp,
+        groupPubkey: group.toBase58(),
+        signers,
+        perpMarket: perpMarket.toBase58(),
+        maker: maker.toBase58(),
+        taker: taker.toBase58(),
+        makerOrderId: makerOrderId.toString(),
+        takerOrderId: takerOrderId.toString(),
+        makerFee: makerFee.toString(),
+        takerFee: takerFee.toString(),
+        price: price.toString(),
+        quantity: quantity.toString(),
+        token,
     };
 }
 
