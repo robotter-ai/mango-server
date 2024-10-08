@@ -1,6 +1,6 @@
 import { VersionedTransaction } from '@solana/web3.js';
 import { config } from '../config';
-import { getAllActiveMangoAccounts } from '../db/mangoAccounts';
+import { getUserMangoAccounts } from '../db/mangoAccounts';
 import { AccountManager } from './accountManager';
 import { parseTransaction } from './parser';
 import { saveMangoEvent } from '../db/mangoEvents';
@@ -24,12 +24,9 @@ export async function validateTransaction(signature: string): Promise<void> {
         if (mangoEvent.eventType === 'tokenDeposit' && !mangoAccountManager.isIndexing(mangoAccount)) {
             await mangoAccountManager.startIndexing(mangoEvent.signers[0], mangoAccount);
         } else if (mangoEvent.eventType === 'tokenWithdraw') {
-            const activeAccounts = getAllActiveMangoAccounts();
-            const accountToDeactivate = activeAccounts.find(account => account.mangoAccount === mangoAccount);
-            
-            if (accountToDeactivate) {
-                await mangoAccountManager.stopIndexing(accountToDeactivate.mangoAccount);
-            }
+            const activeAccounts = getUserMangoAccounts(mangoEvent.signers[0]);
+            const accountToDeactivate = activeAccounts.find(account => account === mangoAccount);
+            if (accountToDeactivate) await mangoAccountManager.stopIndexing(accountToDeactivate);
         }
     }
 }

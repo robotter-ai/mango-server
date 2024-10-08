@@ -28,11 +28,12 @@ export function deactivateMangoAccount(mangoAccount: string) {
   query.run(mangoAccount);
 }
 
-export function getAllActiveMangoAccounts(): { owner: string, mangoAccount: string, accountNumber: number }[] {
+export function getUserMangoAccounts(owner: string): string[] {
   const query = db.prepare(`
-    SELECT owner, mangoAccount, accountNumber
+    SELECT mangoAccount
     FROM mango_accounts
-    WHERE active = 1
+    WHERE owner = ? AND active = 1
   `);
-  return query.all() as { owner: string, mangoAccount: string, accountNumber: number }[];
+  const accounts = query.all(owner) as { mangoAccount: string }[];
+  return accounts.map(account => account.mangoAccount);
 }

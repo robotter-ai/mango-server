@@ -36,14 +36,14 @@ export function updateBotDailyStats(mangoAccount: string, date: string, pnl: num
 }
 
 export function getUserBotsData(userAddress: string): BotData[] {
-    const userBots = db.prepare(`
-        SELECT ma.mangoAccount, ma.accountNumber as id, ma.active, 
-               bs.pnl, bs.portfolio_value as portfolio, bs.accuracy, bs.sharpe_ratio, bs.apr
-        FROM mango_accounts ma
-        LEFT JOIN bot_stats bs ON ma.mangoAccount = bs.mango_account
-        WHERE ma.owner = ?
-        ORDER BY ma.accountNumber ASC
-      `).all(userAddress) as (Omit<BotData, 'events'> & { active: number })[];
+  const userBots = db.prepare(`
+      SELECT ma.mangoAccount, ma.accountNumber as id, ma.active, 
+             bs.pnl, bs.portfolio_value as portfolio, bs.accuracy, bs.sharpe_ratio, bs.apr
+      FROM mango_accounts ma
+      LEFT JOIN bot_stats bs ON ma.mangoAccount = bs.mango_account
+      WHERE ma.owner = ?
+      ORDER BY ma.accountNumber ASC
+    `).all(userAddress) as (Omit<BotData, 'events'> & { active: number })[];
 
   if (userBots.length === 0) {
     return [];
@@ -51,36 +51,46 @@ export function getUserBotsData(userAddress: string): BotData[] {
 
   const botsData: BotData[] = userBots.map(bot => {
     const events = db.prepare(`
-        SELECT 
-          CASE 
-            WHEN me.event_type = 'tokenDeposit' THEN 'deposit'
-            WHEN me.event_type = 'tokenWithdraw' THEN 'withdraw'
-            WHEN me.event_type IN ('perpTrade', 'spotTrade') THEN 'trade'
-          END as event_category,
-          me.timestamp,
-          COALESCE(dwe.amount, te.quantity) as amount,
-          COALESCE(dwe.token, te.token) as token,
-          te.price,
-          te.quantity,
-          te.side
-        FROM mango_events me
-        LEFT JOIN deposit_withdraw_events dwe ON me.event_id = dwe.id AND me.event_type IN ('tokenDeposit', 'tokenWithdraw')
-        LEFT JOIN trade_events te ON me.event_id = te.id AND me.event_type IN ('perpTrade', 'spotTrade')
-        WHERE me.mango_account = ? AND me.event_type IN ('tokenDeposit', 'tokenWithdraw', 'perpTrade', 'spotTrade')
-        ORDER BY me.timestamp DESC
-        LIMIT 30
-      `).all(bot.mangoAccount) as BotData['events'];
+      SELECT 
+        CASE 
+          WHEN event_type IN ('tokenDeposit', 'tokenWithdraw') THEN 
+            CASE 
+              WHEN event_type = 'tokenDeposit' THEN 'deposit'
+              ELSE 'withdraw'
+            END
+          ELSE 'trade'
+        END as event_category,
+        timestamp,
+        CASE 
+          WHEN event_type IN ('tokenDeposit', 'tokenWithdraw') THEN amount
+          ELSE quantity
+        END as amount,
+        token,
+        price,
+        quantity,
+        side
+      FROM (
+        SELECT event_type, timestamp, amount, token, NULL as price, NULL as quantity, NULL as side
+        FROM deposit_withdraw_events
+        WHERE mango_account = ?
+        UNION ALL
+        SELECT event_type, timestamp, NULL as amount, token, price, quantity, side
+        FROM trade_events
+        WHERE mango_account = ?
+      )
+      ORDER BY timestamp DESC
+      LIMIT 30
+    `).all(bot.mangoAccount, bot.mangoAccount) as BotData['events'];
 
-    console.log(bot)
     return {
       id: bot.id,
       name: `Bot ${bot.id}`,
       status: bot.active ? 'Active' : 'Stopped',
       mangoAccount: bot.mangoAccount,
       pnl: {
-        value: bot.pnl ? bot.pnl.value : 0,
+        value: bot.pnl?.value || 0,
         percentage: 0, // Calculate this based on initial investment
-        isPositive: (bot.pnl ? bot.pnl.value : 0) >= 0,
+        isPositive: (bot.pnl?.value || 0) >= 0,
         chartData: [], // You'll need to implement a function to get this data
       },
       portfolio: bot.portfolio || 0,
@@ -94,7 +104,6 @@ export function getUserBotsData(userAddress: string): BotData[] {
 
   return botsData;
 }
-
 export function getDailyPortfolioValuesByMangoAccount(mangoAccount: string, days: number = 30): { date: string, portfolio_value: number }[] {
   const query = db.prepare(`
     SELECT date, portfolio_value

@@ -1,20 +1,24 @@
-import { solanaManager } from './solanaManager';
+import { Elysia } from "elysia";
+import { cors } from '@elysiajs/cors';
 import { config } from "./config";
-import { Elysia } from 'elysia';
 import { initDb } from './db';
 import { initializeMangoClient } from './mango';
-import { cors } from '@elysiajs/cors';
+import { solanaManager } from './solanaManager';
+import { wsManager } from "./wsServer";
+import { swagger } from '@elysiajs/swagger'
 
 await initializeMangoClient();
 initDb();
 
 new Elysia()
-    .use(cors({
-        origin: '*',
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization']
-    }))
-    .use(solanaManager)
-    .listen({ hostname: config.HOST, port: config.PORT }, async ({ hostname, port }) => {
-        console.log(`Running at http://${hostname}:${port}`)
-    });
+  .use(swagger())
+  .use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }))
+  .use(solanaManager)
+  .use(wsManager)
+  .listen(config.PORT);
+
+console.log(`🦊 Elysia is running at http://${config.HOST}:${config.PORT}`);

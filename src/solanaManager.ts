@@ -1,4 +1,4 @@
-import { PublicKey, VersionedTransaction } from "@solana/web3.js";
+import { PublicKey, SystemProgram, VersionedTransaction } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Elysia } from "elysia";
 import { config } from "./config";
@@ -12,6 +12,7 @@ import { parseTransaction } from "./solana/parser";
 import { getUserBotsData } from "./db/botStats";
 import { getNextBotId } from "./db/mangoAccounts";
 import { saveMangoEvent } from "./db/mangoEvents";
+import { broadcastUpdate } from "./wsServer";
 
 export const solanaManager = new Elysia()
   .get('/getUserUsdcBalance', async ({ query }: { query: { user: string } }) => {
@@ -100,7 +101,15 @@ export const solanaManager = new Elysia()
         })
         .instruction();
 
-      const instructions = [createAccountIx, depositIx, setDelegateIx];
+      const createDelegateIx = SystemProgram.createAccount({
+        fromPubkey: ownerPubkey,
+        newAccountPubkey: delegatePubkey,
+        lamports: 1000000,
+        space: 0,
+        programId: SystemProgram.programId,
+      })
+
+      const instructions = [createDelegateIx, createAccountIx, depositIx, setDelegateIx];
       const transaction = await prepareTransaction(instructions, ownerPubkey);
 
       return { transaction, botId: accountNumber, mangoAccount: mangoAccount.toBase58(), status: 200 };
@@ -208,6 +217,7 @@ export const solanaManager = new Elysia()
           for (const mangoEvent of mangoEvents) {
             console.log('mangoEvent from accountListener', mangoEvent)
             saveMangoEvent(mangoEvent);
+            broadcastUpdate(mangoEvent);
           }
         }
 

@@ -120,12 +120,13 @@ export async function prepareTransaction(instructions: TransactionInstruction[],
   }
 
   const units = computeUnitsResult.units;
+  console.log('units', units);
   if (units === 0) throw new Error("Failed to estimate compute units");
   
   const lamportsPerCu = Math.min(Math.max(microLamports, MIN_LAMPORTS_PER_CU), MAX_LAMPORTS_PER_CU);
   console.log(`Priority fee estimate: ${lamportsPerCu} lamports per CU`);
 
-  const computePriceInstruction = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: lamportsPerCu });
+  const computePriceInstruction = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: MAX_LAMPORTS_PER_CU });
   const computeBudgetInstruction = ComputeBudgetProgram.setComputeUnitLimit({ units });
   const allInstructions = [computePriceInstruction, computeBudgetInstruction, ...instructions];
 
