@@ -1,6 +1,7 @@
-import Database from "bun:sqlite";
+import { Database } from 'bun:sqlite';
 
-const db = new Database("tradingbots.sqlite");
+const dbPath = process.env.DB_PATH || './mango.db';
+const db = new Database(dbPath);
 
 export function initDb() {
   db.query(`CREATE TABLE IF NOT EXISTS "mango_accounts" (

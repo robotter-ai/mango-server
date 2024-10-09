@@ -101,15 +101,13 @@ export const solanaManager = new Elysia()
         })
         .instruction();
 
-      const createDelegateIx = SystemProgram.createAccount({
+      const transferIx = SystemProgram.transfer({
         fromPubkey: ownerPubkey,
-        newAccountPubkey: delegatePubkey,
+        toPubkey: delegatePubkey,
         lamports: 1000000,
-        space: 0,
-        programId: SystemProgram.programId,
       })
 
-      const instructions = [createDelegateIx, createAccountIx, depositIx, setDelegateIx];
+      const instructions = [transferIx, createAccountIx, depositIx, setDelegateIx];
       const transaction = await prepareTransaction(instructions, ownerPubkey);
 
       return { transaction, botId: accountNumber, mangoAccount: mangoAccount.toBase58(), status: 200 };

@@ -4,6 +4,7 @@ import { getUserMangoAccounts } from '../db/mangoAccounts';
 import { AccountManager } from './accountManager';
 import { parseTransaction } from './parser';
 import { saveMangoEvent } from '../db/mangoEvents';
+import { broadcastNewBot } from '../wsServer';
 
 const mangoAccountManager = await AccountManager.getInstance();
 
@@ -23,6 +24,7 @@ export async function validateTransaction(signature: string): Promise<void> {
         const mangoAccount = mangoEvent.mangoAccount;
         if (mangoEvent.eventType === 'tokenDeposit' && !mangoAccountManager.isIndexing(mangoAccount)) {
             await mangoAccountManager.startIndexing(mangoEvent.signers[0], mangoAccount);
+            broadcastNewBot(mangoEvent.signers[0], mangoAccount);
         } else if (mangoEvent.eventType === 'tokenWithdraw') {
             const activeAccounts = getUserMangoAccounts(mangoEvent.signers[0]);
             const accountToDeactivate = activeAccounts.find(account => account === mangoAccount);

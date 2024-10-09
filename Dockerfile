@@ -1,14 +1,13 @@
-# Use a base image that provides Node.js
 FROM oven/bun:latest
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy the application code into the container
 COPY ./ ./
 
-# Install dependencies
 RUN bun install
 
-# Command to run when the container starts
+VOLUME /app/data
+
+ENV DB_PATH=/app/data/mango.db
+
 CMD ["bun", "run", "dev"]
