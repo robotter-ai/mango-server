@@ -13,6 +13,7 @@
     "@elysiajs/websocket": "^0.2.8",
     "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.91.8",
+    "@triton-one/yellowstone-grpc": "^0.6.0",
     "@types/jsonwebtoken": "^9.0.7",
     "aleph-sdk-ts": "^3.9.2",
     "bignumber.js": "^9.1.2",
