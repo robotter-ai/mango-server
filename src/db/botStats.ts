@@ -48,6 +48,18 @@ export async function getUserBotsData(userAddress: string): Promise<BotData[]> {
     ORDER BY ma.accountNumber ASC
   `).all(userAddress) as { mangoAccount: string; id: number; active: number }[];
 
+/*  const accounts = await mangoClient.getMangoAccountsForOwner(mangoGroup, new PublicKey(userAddress))
+
+  const mangoAccounts = accounts.map(x => { 
+    return{
+      mangoAccount: x.publicKey.toBase58(), 
+      id: x.accountNum, 
+      active: 0
+    }
+  })
+
+  const mergedBots = [...existingBots, ...mangoAccounts]
+*/
   return await Promise.all(existingBots.map(async (bot) => {
     const mangoAccountAddress = new PublicKey(bot.mangoAccount);
     let onChainAccount;
@@ -81,7 +93,6 @@ export async function getUserBotsData(userAddress: string): Promise<BotData[]> {
       events: []
     };
   }));
-
 }
 
 export function getSingleBotData(mangoAccount: string): BotData | null {

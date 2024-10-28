@@ -17,7 +17,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "aleph-sdk-ts": "^3.9.2",
     "bignumber.js": "^9.1.2",
-    "bs58": "^5.0.0",
+    "bs58": "^6.0.0",
     "elysia": "latest",
     "jsonwebtoken": "^9.0.2",
     "ky": "^1.7.2"

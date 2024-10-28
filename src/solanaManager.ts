@@ -13,6 +13,7 @@ import { getUserBotsData } from "./db/botStats";
 import { getNextBotId } from "./db/mangoAccounts";
 import { saveMangoEvent } from "./db/mangoEvents";
 import { broadcastUpdate } from "./wsServer";
+import { toBase } from "./solana/amountParser";
 
 export const solanaManager = new Elysia()
   .get('/getUserUsdcBalance', async ({ query }: { query: { user: string } }) => {
@@ -51,9 +52,11 @@ export const solanaManager = new Elysia()
     }
   })
 
-  // note: amount without decimals
-  .post('/deposit', async ({ body }: { body: { owner: string, amount: number, delegate: string } }) => {
-    const { owner, amount, delegate } = body;
+  .post('/deposit', async ({ body }: { body: { owner: string, usdcTreasury: string, feesAmount: string, delegate: string } }) => {
+    const { owner, usdcTreasury, feesAmount, delegate } = body;
+    const usdcAmount = toBase(usdcTreasury, 'USDC');
+    const solAmount = toBase(feesAmount, 'SOL');
+    
     const ownerPubkey = new PublicKey(owner);
     const delegatePubkey = new PublicKey(delegate);
     const mangoClient = getMangoClient();
@@ -75,7 +78,7 @@ export const solanaManager = new Elysia()
         .instruction();
         
       const depositIx = await mangoClient.program.methods
-        .tokenDeposit(new BN(amount), false)
+        .tokenDeposit(new BN(usdcAmount), false)
         .accounts({
           tokenAuthority: ownerPubkey,
           group: MANGO_MAINNET_GROUP,
@@ -104,7 +107,7 @@ export const solanaManager = new Elysia()
       const transferIx = SystemProgram.transfer({
         fromPubkey: ownerPubkey,
         toPubkey: delegatePubkey,
-        lamports: 1000000,
+        lamports: solAmount,
       })
 
       const instructions = [transferIx, createAccountIx, depositIx, setDelegateIx];
