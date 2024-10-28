@@ -1,6 +1,6 @@
 import Client, { SubscribeRequest, CommitmentLevel, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
 import { ClientDuplexStream } from "@grpc/grpc-js";
-import { config } from "./config";
+import { config } from "../src/config";
 
 // note: had problems on the startup so implemented a reconnection backoff strategy until getting a response
 class GrpcManager {

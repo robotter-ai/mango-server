@@ -11,7 +11,7 @@ export async function confirmTransaction(transaction: string): Promise<string> {
   let signature: string;
 
   while (retries <= maxRetries) {
-    signature = await config.RPC.sendRawTransaction(serializedTransaction, {
+    signature = await config.RPC_LANDER.sendRawTransaction(serializedTransaction, {
       skipPreflight: true,
       maxRetries: 0,
     });
@@ -49,6 +49,6 @@ async function confirmSignature(signature: string): Promise<string> {
       }
     };
 
-    config.RPC.onSignature(signature, handleResult, 'confirmed');
+    config.RPC_LANDER.onSignature(signature, handleResult, 'confirmed');
   });
 }
