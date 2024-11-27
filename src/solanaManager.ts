@@ -1,5 +1,5 @@
 import { PublicKey, SystemProgram, VersionedTransaction } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { AccountLayout, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Elysia } from "elysia";
 import { config } from "./config";
 import { confirmTransaction } from "./solana/confirmTransaction";
@@ -14,19 +14,23 @@ import { getNextBotId } from "./db/mangoAccounts";
 import { saveMangoEvent } from "./db/mangoEvents";
 import { broadcastUpdate } from "./wsServer";
 import { toBase } from "./solana/amountParser";
+import { getTokenAccounts } from "./solana/fetcher/getTokenAccounts";
 
 export const solanaManager = new Elysia()
-  .get('/getUserUsdcBalance', async ({ query }: { query: { user: string } }) => {
+  .get('/getBalances', async ({ query }: { query: { user: string } }) => {
     try {
       const user = new PublicKey(query.user!);
       const userInfo = await config.RPC.getAccountInfo(user);
       if (!userInfo) return { error: 'Ensure you have SOL and USDC on your wallet', status: 404 };
       
-      const tokenAccount = getAssociatedTokenAddressSync(USDC_MINT, user);
-      const balanace = await config.RPC.getTokenAccountBalance(tokenAccount);
-      if (!balanace.value) return { message: 'Token account does not exists', status: 200 };
-      
-      return { balanace: balanace.value.uiAmount, status: 200 };
+      const tokenAccounts = await getTokenAccounts(user.toBase58());
+      if (tokenAccounts.length === 0) return { message: 'No token accounts found', status: 200 };
+      const balances = tokenAccounts.map((x) => ({
+        mint: x.pubkey,
+        balance: x.data.amount.toString()
+      }));
+
+      return { balances, status: 200 };
     } catch (e: any) {
       console.error(e.message);
       return { error: e.message, status: 500 };
@@ -52,9 +56,19 @@ export const solanaManager = new Elysia()
     }
   })
 
-  .post('/deposit', async ({ body }: { body: { owner: string, usdcTreasury: string, feesAmount: string, delegate: string } }) => {
-    const { owner, usdcTreasury, feesAmount, delegate } = body;
-    const usdcAmount = toBase(usdcTreasury, 'USDC');
+  .post('/deposit', async ({ body }: { 
+    body: { 
+      owner: string, 
+      balanceA: string,
+      mintA: string,
+      balanceB: string, 
+      mintB: string,
+      feesAmount: string, 
+      delegate: string 
+  }}) => {
+    const { owner, balanceA, mintA, balanceB, mintB, feesAmount, delegate } = body;
+    const amountA = toBase(balanceA, mintA);
+    const amountB = toBase(balanceB, mintB);
     const solAmount = toBase(feesAmount, 'SOL');
     
     const ownerPubkey = new PublicKey(owner);
@@ -63,8 +77,10 @@ export const solanaManager = new Elysia()
     const accountNumber = getNextBotId(owner);
     const mangoAccount = deriveMangoAccountAddress(ownerPubkey, accountNumber);
     const mangoGroup = getMangoGroup();
-    const bank = mangoGroup.getFirstBankByMint(USDC_MINT);
-    const tokenAccount = getAssociatedTokenAddressSync(USDC_MINT, ownerPubkey);
+    const bankA = mangoGroup.getFirstBankByMint(new PublicKey(mintA));
+    const bankB = mangoGroup.getFirstBankByMint(new PublicKey(mintB));
+    const tokenAccountA = getAssociatedTokenAddressSync(new PublicKey(mintA), ownerPubkey);
+    const tokenAccountB = getAssociatedTokenAddressSync(new PublicKey(mintB), ownerPubkey);
 
     try {
       const createAccountIx = await mangoClient.program.methods
@@ -77,19 +93,6 @@ export const solanaManager = new Elysia()
         })
         .instruction();
         
-      const depositIx = await mangoClient.program.methods
-        .tokenDeposit(new BN(usdcAmount), false)
-        .accounts({
-          tokenAuthority: ownerPubkey,
-          group: MANGO_MAINNET_GROUP,
-          account: mangoAccount,
-          owner: ownerPubkey,
-          bank: bank.publicKey,
-          vault: bank.vault,
-          tokenAccount,
-        })
-        .instruction();
-
       const setDelegateIx = await mangoClient.program.methods
         .accountEdit(
           null,
@@ -110,7 +113,40 @@ export const solanaManager = new Elysia()
         lamports: solAmount,
       })
 
-      const instructions = [transferIx, createAccountIx, depositIx, setDelegateIx];
+      const instructions = [transferIx, createAccountIx, setDelegateIx];
+
+      if (amountA > 0) {
+        const depositIx = await mangoClient.program.methods
+            .tokenDeposit(new BN(amountA), false)
+            .accounts({
+                tokenAuthority: ownerPubkey,
+                group: MANGO_MAINNET_GROUP,
+                account: mangoAccount,
+                owner: ownerPubkey,
+                bank: bankA.publicKey,
+                vault: bankA.vault,
+                tokenAccount: tokenAccountA,
+            })
+            .instruction();
+        instructions.push(depositIx);
+    }
+
+    if (amountB > 0) {
+        const depositIxB = await mangoClient.program.methods
+            .tokenDeposit(new BN(amountB), false)
+            .accounts({
+                tokenAuthority: ownerPubkey,
+                group: MANGO_MAINNET_GROUP,
+                account: mangoAccount,
+                owner: ownerPubkey,
+                bank: bankB.publicKey,
+                vault: bankB.vault,
+                tokenAccount: tokenAccountB,
+            })
+            .instruction();
+        instructions.push(depositIxB);
+      }
+
       const transaction = await prepareTransaction(instructions, ownerPubkey);
 
       return { transaction, botId: accountNumber, mangoAccount: mangoAccount.toBase58(), status: 200 };
@@ -125,49 +161,73 @@ export const solanaManager = new Elysia()
 
   .post('/withdraw', async ({ body }: { body: { owner: string, botId: number } }) => {
     try {
-      const { owner, botId } = body;
-      const ownerPubkey = new PublicKey(owner);
-      const mangoAddress = deriveMangoAccountAddress(ownerPubkey, botId);
-      const mangoClient = getMangoClient();
-      const mangoAccount = await mangoClient.getMangoAccount(mangoAddress);
-      const mangoGroup = getMangoGroup();
-      const bank = mangoGroup.getFirstBankByMint(USDC_MINT);
-      const tokenBalance = mangoAccount.getTokenBalance(bank);
-      const withdrawAmount = tokenBalance.toNumber();
-      
-      if (withdrawAmount <= 0) {
-        return { message: 'Insufficient balance to withdraw', status: 400 };
-      }
+        const { owner, botId } = body;
+        const ownerPubkey = new PublicKey(owner);
+        const mangoAddress = deriveMangoAccountAddress(ownerPubkey, botId);
+        const mangoClient = getMangoClient();
+        const mangoAccount = await mangoClient.getMangoAccount(mangoAddress);
+        const mangoGroup = getMangoGroup();
+        
+        // Get the map of banks by mint
+        const banksMap = mangoGroup.banksMapByMint;
 
-      const withdrawIx = await mangoClient.program.methods
-        .tokenWithdraw(new BN(withdrawAmount), true)
-        .accounts({
-          group: mangoGroup.publicKey,
-          account: mangoAccount.publicKey,
-          owner: ownerPubkey,
-          bank: bank.publicKey,
-          vault: bank.vault,
-          tokenAccount: getAssociatedTokenAddressSync(USDC_MINT, ownerPubkey),
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .instruction();
+        // Check balances of all banks
+        const balances = Array.from(banksMap.entries()).map(([mint, banks]) => ({
+            mint,
+            balance: mangoAccount.getTokenBalance(banks[0]).toNumber() // Assuming you want the balance of the first bank for each mint
+        }));
 
-      const closeAccountIx = await mangoClient.program.methods
-        .accountClose(false)
-        .accounts({
-          group: mangoGroup.publicKey,
-          account: mangoAccount.publicKey,
-          owner: ownerPubkey,
-          solDestination: ownerPubkey,
-        })
-        .instruction();
+        console.log('Balances of all banks:', balances);
 
-      const transaction = await prepareTransaction([withdrawIx, closeAccountIx], ownerPubkey);
+        // Filter for withdrawable balances
+        const withdrawableBalances = balances.filter(balance => balance.balance > 0);
+        if (withdrawableBalances.length === 0) {
+            return { message: 'No withdrawable balances available', status: 400 };
+        }
 
-      return { transaction, status: 200 };
+        // Create withdrawal instructions for all withdrawable balances
+        const instructions = [];
+        for (const { mint, balance } of withdrawableBalances) {
+            const bank = banksMap.get(mint)?.[0]; // Get the first bank for the mint
+            if (!bank) {
+              return { message: 'Bank not found', status: 400 };
+            }
+
+            const withdrawIx = await mangoClient.program.methods
+                .tokenWithdraw(new BN(balance), true)
+                .accounts({
+                    group: mangoGroup.publicKey,
+                    account: mangoAccount.publicKey,
+                    owner: ownerPubkey,
+                    bank: bank.publicKey,
+                    vault: bank.vault,
+                    tokenAccount: getAssociatedTokenAddressSync(bank.mint, ownerPubkey),
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                })
+                .instruction();
+
+            instructions.push(withdrawIx); // Add each withdraw instruction to the array
+        }
+
+        // Optionally, add the account close instruction if needed
+        const closeAccountIx = await mangoClient.program.methods
+            .accountClose(false)
+            .accounts({
+                group: mangoGroup.publicKey,
+                account: mangoAccount.publicKey,
+                owner: ownerPubkey,
+                solDestination: ownerPubkey,
+            })
+            .instruction();
+
+        instructions.push(closeAccountIx); // Add the close account instruction
+
+        const transaction = await prepareTransaction(instructions, ownerPubkey);
+
+        return { transaction, status: 200 };
     } catch (error: any) {
-      console.error('Error creating withdraw transaction:', error);
-      return { message: 'error', error: error.message, status: 500 };
+        console.error('Error creating withdraw transaction:', error);
+        return { message: 'error', error: error.message, status: 500 };
     }
   })
 
