@@ -6,7 +6,7 @@
     "dev": "bun run --watch src/index.ts"
   },
   "dependencies": {
-    "@blockworks-foundation/mango-v4": "^0.33.5",
+    "@blockworks-foundation/mango-v4": "^0.33.7",
     "@coral-xyz/anchor": "^0.29.0",
     "@elysiajs/cors": "^1.1.1",
     "@elysiajs/swagger": "^1.1.3",
@@ -18,14 +18,15 @@
     "aleph-sdk-ts": "^3.9.2",
     "bignumber.js": "^9.1.2",
     "bs58": "^6.0.0",
-    "elysia": "latest",
+    "elysia": "^1.1.25",
     "jsonwebtoken": "^9.0.2",
     "ky": "^1.7.2"
   },
   "devDependencies": {
-    "bun-types": "latest",
     "@coral-xyz/borsh": "^0.29.0",
-    "@types/bn.js": "5.1.5"
+    "@types/bn.js": "5.1.5",
+    "bun-types": "latest",
+    "prettier": "3.4.1"
   },
   "module": "src/index.js"
 }

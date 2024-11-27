@@ -1,19 +1,22 @@
-import { Database } from 'bun:sqlite';
+import { Database } from "bun:sqlite";
 
-const dbPath = process.env.DB_PATH || './mango.db';
+const dbPath = process.env.DB_PATH || "./mango.db";
 const db = new Database(dbPath);
 
 export function initDb() {
-  db.query(`CREATE TABLE IF NOT EXISTS "mango_accounts" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "mango_accounts" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     owner TEXT NOT NULL,
     mangoAccount TEXT NOT NULL UNIQUE,
     accountNumber INTEGER NOT NULL,
     active BOOLEAN NOT NULL DEFAULT 1,
     UNIQUE(owner, accountNumber)
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "deposit_withdraw_events" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "deposit_withdraw_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -28,9 +31,11 @@ export function initDb() {
     vault TEXT NOT NULL,
     token_account TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "trade_events" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "trade_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -55,9 +60,11 @@ export function initDb() {
     open_orders TEXT,
     self_trade_behavior TEXT,
     UNIQUE(signature)
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "swap_events" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "swap_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -75,9 +82,11 @@ export function initDb() {
     max_buy_token_to_release TEXT NOT NULL,
     max_sell_token_to_release TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "liquidation_events" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "liquidation_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -95,9 +104,11 @@ export function initDb() {
     liab_bank TEXT NOT NULL,
     max_liab_transfer TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "perp_cancel_order_events" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "perp_cancel_order_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     mango_account TEXT NOT NULL,
@@ -110,9 +121,11 @@ export function initDb() {
     owner TEXT NOT NULL,
     signers TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
-  
-  db.query(`CREATE TABLE IF NOT EXISTS "perp_cancel_all_orders_events" (
+  )`,
+  ).run();
+
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "perp_cancel_all_orders_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     mango_account TEXT NOT NULL,
@@ -124,9 +137,11 @@ export function initDb() {
     owner TEXT NOT NULL,
     signers TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
-  
-  db.query(`CREATE TABLE IF NOT EXISTS "perp_fill_events" (
+  )`,
+  ).run();
+
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "perp_fill_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     mango_account TEXT NOT NULL,
@@ -144,9 +159,11 @@ export function initDb() {
     token TEXT NOT NULL,
     signers TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "perp_place_order_events" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "perp_place_order_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -168,9 +185,11 @@ export function initDb() {
     expiry_timestamp TEXT,
     "limit" TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
-  
-  db.query(`CREATE TABLE IF NOT EXISTS "perp_settle_pnl_events" (
+  )`,
+  ).run();
+
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "perp_settle_pnl_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -183,9 +202,11 @@ export function initDb() {
     account_a TEXT NOT NULL,
     account_b TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
-  
-  db.query(`CREATE TABLE IF NOT EXISTS "perp_settle_fees_events" (
+  )`,
+  ).run();
+
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "perp_settle_fees_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -197,9 +218,11 @@ export function initDb() {
     token TEXT NOT NULL,
     fee_account TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
-  
-  db.query(`CREATE TABLE IF NOT EXISTS "perp_force_close_position_events" (
+  )`,
+  ).run();
+
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "perp_force_close_position_events" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     signature TEXT NOT NULL,
     event_type TEXT NOT NULL,
@@ -213,9 +236,11 @@ export function initDb() {
     liqor_owner TEXT NOT NULL,
     base_transfer TEXT NOT NULL,
     UNIQUE(signature)
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "bot_stats" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "bot_stats" (
     mango_account TEXT PRIMARY KEY,
     pnl REAL,
     portfolio_value REAL,
@@ -223,15 +248,18 @@ export function initDb() {
     sharpe_ratio REAL,
     apr REAL,
     last_updated INTEGER
-  )`).run();
+  )`,
+  ).run();
 
-  db.query(`CREATE TABLE IF NOT EXISTS "bot_daily_stats" (
+  db.query(
+    `CREATE TABLE IF NOT EXISTS "bot_daily_stats" (
     mango_account TEXT,
     date TEXT,
     pnl REAL,
     portfolio_value REAL,
     PRIMARY KEY (mango_account, date)
-  )`).run();
+  )`,
+  ).run();
 }
 
 export default db;

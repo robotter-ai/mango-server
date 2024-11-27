@@ -1,82 +1,87 @@
-import { Elysia } from 'elysia';
-import { ElysiaWS } from '@elysiajs/websocket';
-import { BotData, MangoEvent } from './types';
+import { Elysia } from "elysia";
+import { ElysiaWS } from "@elysiajs/websocket";
+import { BotData, MangoEvent } from "./types";
 import { ServerWebSocket } from "bun";
-import { getUserBotsData, getSingleBotData } from './db/botStats';
+import { getUserBotsData, getSingleBotData } from "./db/botStats";
 
-type WS = ElysiaWS<
-    ServerWebSocket<any>,
-    any,
-    any
->
+type WS = ElysiaWS<ServerWebSocket<any>, any, any>;
 
 const clientConnections = new Map<WS, Set<string>>();
 const accountConnections = new Map<string, Set<WS>>();
 
-export const wsManager = new Elysia()
-  .ws('/ws', {
-    message(ws, message) {
-        console.log('Received message:', message);
+export const wsManager = new Elysia().ws("/ws", {
+  message(ws, message) {
+    console.log("Received message:", message);
 
-        const [action, account] = (message as string).split(':');
+    const [action, account] = (message as string).split(":");
 
-        switch (action) {
-          case 'connect':
-            handleConnect(ws, account);
-            break;
-          case 'disconnect':
-            handleDisconnect(ws);
-            break;
-          default:
-            ws.send(JSON.stringify({
-              type: 'error',
-              payload: { message: 'Unknown message type' }
-            }));
-        }
-    },
-    close(ws) {
-      removeConnection(ws);
-      console.log('WebSocket disconnected');
+    switch (action) {
+      case "connect":
+        handleConnect(ws, account);
+        break;
+      case "disconnect":
+        handleDisconnect(ws);
+        break;
+      default:
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            payload: { message: "Unknown message type" },
+          }),
+        );
     }
-  });
+  },
+  close(ws) {
+    removeConnection(ws);
+    console.log("WebSocket disconnected");
+  },
+});
 
-  async function handleConnect(ws: WS, account: string) {
-    try {
-      const userBotsData = await getUserBotsData(account);
-      registerAccounts(ws, [account]);
-      userBotsData.forEach(bot => registerAccounts(ws, [bot.mangoAccount])); // Register each bot's mango account
-      ws.send(JSON.stringify({
-        type: 'connectionSuccess',
-        payload: { bots: [...userBotsData, ...placeholderBotsData] }
-      }));
-    } catch (error) {
-      console.error('Error fetching user bots data:', error);
-      ws.send(JSON.stringify({
-        type: 'error',
-        payload: { message: 'Failed to fetch user bots data' }
-      }));
-    }
+async function handleConnect(ws: WS, account: string) {
+  try {
+    const userBotsData = await getUserBotsData(account);
+    registerAccounts(ws, [account]);
+    userBotsData.forEach((bot) => registerAccounts(ws, [bot.mangoAccount])); // Register each bot's mango account
+    ws.send(
+      JSON.stringify({
+        type: "connectionSuccess",
+        payload: { bots: [...userBotsData, ...placeholderBotsData] },
+      }),
+    );
+  } catch (error) {
+    console.error("Error fetching user bots data:", error);
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        payload: { message: "Failed to fetch user bots data" },
+      }),
+    );
   }
+}
 
 function handleDisconnect(ws: WS) {
   const clientAccounts = clientConnections.get(ws);
   if (clientAccounts) {
     unregisterAccounts(ws, Array.from(clientAccounts));
-    ws.send(JSON.stringify({
-      type: 'disconnectionSuccess',
-      payload: { accounts: Array.from(clientAccounts) }
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "disconnectionSuccess",
+        payload: { accounts: Array.from(clientAccounts) },
+      }),
+    );
   } else {
-    ws.send(JSON.stringify({
-      type: 'error',
-      payload: { message: 'No accounts registered for this connection' }
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        payload: { message: "No accounts registered for this connection" },
+      }),
+    );
   }
 }
 
 function registerAccounts(ws: WS, accounts: string[]) {
   const clientAccounts = clientConnections.get(ws) || new Set();
-  accounts.forEach(account => {
+  accounts.forEach((account) => {
     clientAccounts.add(account);
     if (!accountConnections.has(account)) {
       accountConnections.set(account, new Set());
@@ -89,7 +94,7 @@ function registerAccounts(ws: WS, accounts: string[]) {
 function unregisterAccounts(ws: WS, accounts: string[]) {
   const clientAccounts = clientConnections.get(ws);
   if (clientAccounts) {
-    accounts.forEach(account => {
+    accounts.forEach((account) => {
       clientAccounts.delete(account);
       const connections = accountConnections.get(account);
       if (connections) {
@@ -110,7 +115,7 @@ function unregisterAccounts(ws: WS, accounts: string[]) {
 function removeConnection(ws: WS) {
   const accounts = clientConnections.get(ws);
   if (accounts) {
-    accounts.forEach(account => {
+    accounts.forEach((account) => {
       const connections = accountConnections.get(account);
       if (connections) {
         connections.delete(ws);
@@ -126,11 +131,13 @@ function removeConnection(ws: WS) {
 export function broadcastUpdate(event: MangoEvent) {
   const connections = accountConnections.get(event.mangoAccount);
   if (connections) {
-    connections.forEach(ws => {
-      ws.send(JSON.stringify({
-        type: 'botUpdate',
-        payload: { event }
-      }));
+    connections.forEach((ws) => {
+      ws.send(
+        JSON.stringify({
+          type: "botUpdate",
+          payload: { event },
+        }),
+      );
     });
   }
 }
@@ -140,40 +147,49 @@ export function broadcastNewBot(userAddress: string, mangoAccount: string) {
   console.log(`Current accountConnections:`, accountConnections);
 
   const connections = accountConnections.get(userAddress);
-  
+
   if (!connections || connections.size === 0) {
     console.log(`No active connections found for user: ${userAddress}`);
     return;
   }
 
-  console.log(`Found ${connections.size} connection(s) for user: ${userAddress}`);
+  console.log(
+    `Found ${connections.size} connection(s) for user: ${userAddress}`,
+  );
 
   const newBotData = getSingleBotData(mangoAccount);
-  
+
   if (!newBotData) {
-    console.log(`No data found for new bot with mango account: ${mangoAccount}`);
+    console.log(
+      `No data found for new bot with mango account: ${mangoAccount}`,
+    );
     return;
   }
 
-  connections.forEach(ws => {
+  connections.forEach((ws) => {
     console.log(`Sending new bot data to a connection`);
-    ws.send(JSON.stringify({
-      type: 'newBot',
-      payload: { bot: newBotData }
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "newBot",
+        payload: { bot: newBotData },
+      }),
+    );
   });
 
   console.log(`Finished broadcasting new bot data`);
 
   // Register the new mango account for future updates
-  connections.forEach(ws => registerAccounts(ws, [mangoAccount]));
+  connections.forEach((ws) => registerAccounts(ws, [mangoAccount]));
 }
 
-function generateInitialBotData(mangoAccount: string, userAddress: string): BotData {
+function generateInitialBotData(
+  mangoAccount: string,
+  userAddress: string,
+): BotData {
   return {
     id: Date.now(),
     name: `Bot ${Math.floor(Math.random() * 1000)}`,
-    status: 'Active',
+    status: "Active",
     mangoAccount: mangoAccount,
     pnl: {
       value: 0,
@@ -186,16 +202,16 @@ function generateInitialBotData(mangoAccount: string, userAddress: string): BotD
     sharpeRatio: 0,
     apr: 0,
     delegate: userAddress,
-    events: []
+    events: [],
   };
 }
 
 const placeholderBotsData: BotData[] = [
   {
     id: 1,
-    name: 'Big Brain',
-    status: 'Active',
-    mangoAccount: '',
+    name: "Big Brain",
+    status: "Active",
+    mangoAccount: "",
     pnl: {
       value: 1837,
       percentage: 20,
@@ -206,14 +222,14 @@ const placeholderBotsData: BotData[] = [
     accuracy: 65,
     sharpeRatio: 2.81,
     apr: 210,
-    delegate: 'rikiFB2VznT2izUT7UffzWCn1X4gNmGutX7XEqFdpRR',
-    events: []
+    delegate: "rikiFB2VznT2izUT7UffzWCn1X4gNmGutX7XEqFdpRR",
+    events: [],
   },
   {
     id: 2,
-    name: 'Trade Genius',
-    status: 'Active',
-    mangoAccount: '',
+    name: "Trade Genius",
+    status: "Active",
+    mangoAccount: "",
     pnl: {
       value: 773,
       percentage: 11,
@@ -224,14 +240,14 @@ const placeholderBotsData: BotData[] = [
     accuracy: 59,
     sharpeRatio: 2.01,
     apr: 187,
-    delegate: 'rikiFB2VznT2izUT7UffzWCn1X4gNmGutX7XEqFdpRR',
-    events: []
+    delegate: "rikiFB2VznT2izUT7UffzWCn1X4gNmGutX7XEqFdpRR",
+    events: [],
   },
   {
     id: 3,
-    name: 'Alpha Trader',
-    status: 'Stopped',
-    mangoAccount: '',
+    name: "Alpha Trader",
+    status: "Stopped",
+    mangoAccount: "",
     pnl: {
       value: 31,
       percentage: 1,
@@ -242,7 +258,7 @@ const placeholderBotsData: BotData[] = [
     accuracy: 49,
     sharpeRatio: 1.75,
     apr: 165,
-    delegate: 'rikiFB2VznT2izUT7UffzWCn1X4gNmGutX7XEqFdpRR',
-    events: []
+    delegate: "rikiFB2VznT2izUT7UffzWCn1X4gNmGutX7XEqFdpRR",
+    events: [],
   },
 ];

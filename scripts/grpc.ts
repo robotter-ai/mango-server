@@ -1,11 +1,16 @@
-import Client, { SubscribeRequest, CommitmentLevel, SubscribeUpdate } from "@triton-one/yellowstone-grpc";
+import Client, {
+  SubscribeRequest,
+  CommitmentLevel,
+  SubscribeUpdate,
+} from "@triton-one/yellowstone-grpc";
 import { ClientDuplexStream } from "@grpc/grpc-js";
 import { config } from "../src/config";
 
 // note: had problems on the startup so implemented a reconnection backoff strategy until getting a response
 class GrpcManager {
   private client: Client | null = null;
-  private stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate> | null = null;
+  private stream: ClientDuplexStream<SubscribeRequest, SubscribeUpdate> | null =
+    null;
   private reconnectTimeout: Timer | null = null;
   private initialReconnectDelay = 1000; // 1 second
   private maxReconnectDelay = 60000; // 1 minute
@@ -14,14 +19,14 @@ class GrpcManager {
   private currentReconnectDelay: number = this.initialReconnectDelay;
 
   private channelOptions = {
-    'grpc.max_receive_message_length': 1024 * 1024, // 1 MB
-    'grpc.max_send_message_length': 1024 * 1024, // 1 MB
-    'grpc.keepalive_time_ms': 10000,
-    'grpc.keepalive_timeout_ms': 5000,
-    'grpc.keepalive_permit_without_calls': 1,
-    'grpc.http2.max_pings_without_data': 0,
-    'grpc.max_connection_idle_ms': 60000,
-    'grpc.client_idle_timeout_ms': 60000,
+    "grpc.max_receive_message_length": 1024 * 1024, // 1 MB
+    "grpc.max_send_message_length": 1024 * 1024, // 1 MB
+    "grpc.keepalive_time_ms": 10000,
+    "grpc.keepalive_timeout_ms": 5000,
+    "grpc.keepalive_permit_without_calls": 1,
+    "grpc.http2.max_pings_without_data": 0,
+    "grpc.max_connection_idle_ms": 60000,
+    "grpc.client_idle_timeout_ms": 60000,
   };
 
   async connect() {
@@ -29,7 +34,7 @@ class GrpcManager {
       this.client = new Client(
         config.GRPC_ENDPOINT,
         config.GRPC_TOKEN,
-        this.channelOptions
+        this.channelOptions,
       );
       this.stream = await this.client.subscribe();
 
@@ -47,8 +52,8 @@ class GrpcManager {
 
   private async subscribe() {
     const request: SubscribeRequest = {
-      slots: { 
-        "incoming_slots": {}
+      slots: {
+        incoming_slots: {},
       },
       accounts: {},
       transactions: {},
@@ -57,7 +62,7 @@ class GrpcManager {
       accountsDataSlice: [],
       transactionsStatus: {},
       entry: {},
-      commitment: CommitmentLevel.CONFIRMED
+      commitment: CommitmentLevel.CONFIRMED,
     };
 
     if (!this.stream) {
@@ -93,15 +98,19 @@ class GrpcManager {
       clearTimeout(this.reconnectTimeout);
     }
 
-    const jitteredDelay = this.currentReconnectDelay * (1 + Math.random() * this.jitterFactor);
+    const jitteredDelay =
+      this.currentReconnectDelay * (1 + Math.random() * this.jitterFactor);
     console.log(`Scheduling reconnection in ${Math.round(jitteredDelay)}ms`);
-    
+
     this.reconnectTimeout = setTimeout(() => {
       this.connect();
     }, jitteredDelay);
 
     // Calculate next delay for potential future reconnect
-    this.currentReconnectDelay = Math.min(this.currentReconnectDelay * this.reconnectFactor, this.maxReconnectDelay);
+    this.currentReconnectDelay = Math.min(
+      this.currentReconnectDelay * this.reconnectFactor,
+      this.maxReconnectDelay,
+    );
   };
 
   disconnect() {
@@ -127,8 +136,8 @@ async function listenForSlotUpdates() {
   const grpcManager = new GrpcManager();
   await grpcManager.connect();
 
-  process.on('SIGINT', () => {
-    console.log('Caught interrupt signal. Disconnecting...');
+  process.on("SIGINT", () => {
+    console.log("Caught interrupt signal. Disconnecting...");
     grpcManager.disconnect();
     process.exit();
   });

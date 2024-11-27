@@ -1,22 +1,32 @@
-import db from './index';
+import db from "./index";
 
 export function getNextBotId(owner: string): number {
   return db.transaction(() => {
-    const maxAccountNumber = db.prepare(`
+    const maxAccountNumber = db
+      .prepare(
+        `
       SELECT COALESCE(MAX(accountNumber), 0) as maxAccountNumber
       FROM mango_accounts
       WHERE owner = ?
-    `).get(owner) as { maxAccountNumber: number };
+    `,
+      )
+      .get(owner) as { maxAccountNumber: number };
 
     return maxAccountNumber.maxAccountNumber + 1;
   })();
 }
 
-export function addMangoAccount(owner: string, mangoAccount: string, accountNumber: number): void {
-  db.prepare(`
+export function addMangoAccount(
+  owner: string,
+  mangoAccount: string,
+  accountNumber: number,
+): void {
+  db.prepare(
+    `
     INSERT INTO mango_accounts (owner, mangoAccount, accountNumber)
     VALUES (?, ?, ?)
-  `).run(owner, mangoAccount, accountNumber);
+  `,
+  ).run(owner, mangoAccount, accountNumber);
 }
 
 export function deactivateMangoAccount(mangoAccount: string) {
@@ -35,5 +45,5 @@ export function getUserMangoAccounts(owner: string): string[] {
     WHERE owner = ? AND active = 1
   `);
   const accounts = query.all(owner) as { mangoAccount: string }[];
-  return accounts.map(account => account.mangoAccount);
+  return accounts.map((account) => account.mangoAccount);
 }

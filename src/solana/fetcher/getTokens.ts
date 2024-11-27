@@ -18,67 +18,67 @@ export type TokenInfo = {
 export async function getTokens(userKey: string): Promise<TokenInfo[]> {
   const threshold = new BigNumber(10);
 
-    const tokenAccounts = await getTokenAccounts(userKey);
-    const [mints, prices] = await Promise.all([
-      getMints(tokenAccounts.map((x) => new PublicKey(x.pubkey))),
-      getPrices(tokenAccounts.map((x) => x.pubkey)),
-    ]);
-  
-    const tokens = await Promise.all(
-      tokenAccounts.map(async (accountData) => {
-        try {
-          const mint = accountData.data.mint.toBase58();
-          const mintData = mints[mint];
-          const amount = accountData.data.amount.dividedBy(
-            new BigNumber(10).pow(mintData.decimals),
-          );
-  
-          const price = prices.data[mint].price;
-          const totalValue = amount.multipliedBy(new BigNumber(price));
-          if (totalValue.isLessThan(threshold)) return null;
-  
-          const metadata = await getTokenInfo(mint);
-          return {
-            mint,
-            address: accountData.pubkey,
-            amount: amount.toFixed(2),
-            value: threshold.dividedBy(price).toFixed(2).toString(),
-            decimals: mintData.decimals,
-            metadata,
-          } as TokenInfo;
-        } catch (e: any) {
-          return null;
-        }
-      }),
-    );
-  
-    const filteredTokens = tokens.filter(
-      (token) => token !== null,
-    ) as TokenInfo[];
-  
-    const solMint = mintFromSymbol["SOL"];
-    const solDecimals = decimalsFromSymbol["SOL"];
-    const solBalance = await config.RPC.getBalance(new PublicKey(userKey));
-    const solAmount = new BigNumber(solBalance).dividedBy(
-      new BigNumber(10).pow(solDecimals),
-    );
-    const price = await getPrices([solMint]);
-    if (price) {
-      const priceBN = new BigNumber(price.data[solMint].price);
-      const totalValue = solAmount.multipliedBy(priceBN);
-      if (totalValue.isGreaterThan(threshold)) {
-        const metadata = await getTokenInfo(solMint);
+  const tokenAccounts = await getTokenAccounts(userKey);
+  const [mints, prices] = await Promise.all([
+    getMints(tokenAccounts.map((x) => new PublicKey(x.pubkey))),
+    getPrices(tokenAccounts.map((x) => x.pubkey)),
+  ]);
 
-        filteredTokens.push({
-          mint: solMint,
-          address: userKey,
-          amount: solAmount.toString(),
-          value: threshold.dividedBy(priceBN).toFixed(2).toString(),
-          decimals: solDecimals,
+  const tokens = await Promise.all(
+    tokenAccounts.map(async (accountData) => {
+      try {
+        const mint = accountData.data.mint.toBase58();
+        const mintData = mints[mint];
+        const amount = accountData.data.amount.dividedBy(
+          new BigNumber(10).pow(mintData.decimals),
+        );
+
+        const price = prices.data[mint].price;
+        const totalValue = amount.multipliedBy(new BigNumber(price));
+        if (totalValue.isLessThan(threshold)) return null;
+
+        const metadata = await getTokenInfo(mint);
+        return {
+          mint,
+          address: accountData.pubkey,
+          amount: amount.toFixed(2),
+          value: threshold.dividedBy(price).toFixed(2).toString(),
+          decimals: mintData.decimals,
           metadata,
-        });
+        } as TokenInfo;
+      } catch (e: any) {
+        return null;
       }
+    }),
+  );
+
+  const filteredTokens = tokens.filter(
+    (token) => token !== null,
+  ) as TokenInfo[];
+
+  const solMint = mintFromSymbol["SOL"];
+  const solDecimals = decimalsFromSymbol["SOL"];
+  const solBalance = await config.RPC.getBalance(new PublicKey(userKey));
+  const solAmount = new BigNumber(solBalance).dividedBy(
+    new BigNumber(10).pow(solDecimals),
+  );
+  const price = await getPrices([solMint]);
+  if (price) {
+    const priceBN = new BigNumber(price.data[solMint].price);
+    const totalValue = solAmount.multipliedBy(priceBN);
+    if (totalValue.isGreaterThan(threshold)) {
+      const metadata = await getTokenInfo(solMint);
+
+      filteredTokens.push({
+        mint: solMint,
+        address: userKey,
+        amount: solAmount.toString(),
+        value: threshold.dividedBy(priceBN).toFixed(2).toString(),
+        decimals: solDecimals,
+        metadata,
+      });
     }
-  
-    return filteredTokens;
   }
+
+  return filteredTokens;
+}

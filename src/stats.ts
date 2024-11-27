@@ -1,5 +1,5 @@
-import db from './db/index';
-import { TradeEvent, DepositEvent, WithdrawEvent } from './types';
+import db from "./db/index";
+import { TradeEvent, DepositEvent, WithdrawEvent } from "./types";
 
 export function calculatePNL(mangoAccount: string): number {
   const depositWithdrawQuery = db.prepare(`
@@ -7,7 +7,10 @@ export function calculatePNL(mangoAccount: string): number {
     FROM deposit_withdraw_events
     WHERE mango_account = ?
   `);
-  const depositWithdrawEvents = depositWithdrawQuery.all(mangoAccount) as (DepositEvent | WithdrawEvent)[];
+  const depositWithdrawEvents = depositWithdrawQuery.all(mangoAccount) as (
+    | DepositEvent
+    | WithdrawEvent
+  )[];
 
   const tradeQuery = db.prepare(`
     SELECT side, price, quantity
@@ -19,16 +22,16 @@ export function calculatePNL(mangoAccount: string): number {
   let totalPnL = 0;
 
   for (const event of depositWithdrawEvents) {
-    if (event.eventType === 'tokenDeposit') {
+    if (event.eventType === "tokenDeposit") {
       totalPnL -= parseFloat(event.amount);
-    } else if (event.eventType === 'tokenWithdraw') {
+    } else if (event.eventType === "tokenWithdraw") {
       totalPnL += parseFloat(event.amount);
     }
   }
 
   for (const trade of trades) {
     const tradeValue = parseFloat(trade.price) * parseFloat(trade.quantity);
-    totalPnL += trade.side === 'buy' ? -tradeValue : tradeValue;
+    totalPnL += trade.side === "buy" ? -tradeValue : tradeValue;
   }
 
   return totalPnL;
@@ -42,7 +45,9 @@ export function calculatePortfolio(mangoAccount: string): number {
     ORDER BY date DESC
     LIMIT 1
   `);
-  const result = query.get(mangoAccount) as { portfolio_value: number } | undefined;
+  const result = query.get(mangoAccount) as
+    | { portfolio_value: number }
+    | undefined;
   return result ? result.portfolio_value : 0;
 }
 
@@ -66,8 +71,10 @@ export function calculateAccuracy(mangoAccount: string): number {
       const prevPrice = parseFloat(prevTrade.price);
       const currentPrice = parseFloat(currentTrade.price);
 
-      if ((prevTrade.side === 'buy' && currentPrice > prevPrice) ||
-          (prevTrade.side === 'sell' && currentPrice < prevPrice)) {
+      if (
+        (prevTrade.side === "buy" && currentPrice > prevPrice) ||
+        (prevTrade.side === "sell" && currentPrice < prevPrice)
+      ) {
         profitableTrades++;
       }
       totalTrades++;
@@ -95,8 +102,15 @@ export function calculateSharpeRatio(mangoAccount: string): number {
     dailyReturns.push((currentValue - prevValue) / prevValue);
   }
 
-  const avgReturn = dailyReturns.reduce((sum, return_) => sum + return_, 0) / dailyReturns.length;
-  const stdDev = Math.sqrt(dailyReturns.reduce((sum, return_) => sum + Math.pow(return_ - avgReturn, 2), 0) / dailyReturns.length);
+  const avgReturn =
+    dailyReturns.reduce((sum, return_) => sum + return_, 0) /
+    dailyReturns.length;
+  const stdDev = Math.sqrt(
+    dailyReturns.reduce(
+      (sum, return_) => sum + Math.pow(return_ - avgReturn, 2),
+      0,
+    ) / dailyReturns.length,
+  );
 
   const annualizedReturn = avgReturn * 365;
   const annualizedStdDev = stdDev * Math.sqrt(365);
@@ -111,7 +125,10 @@ export function calculateAPR(mangoAccount: string): number {
     WHERE mango_account = ?
     ORDER BY date ASC
   `);
-  const dailyValues = query.all(mangoAccount) as { portfolio_value: number, date: string }[];
+  const dailyValues = query.all(mangoAccount) as {
+    portfolio_value: number;
+    date: string;
+  }[];
 
   if (dailyValues.length < 2) return 0;
 
@@ -119,7 +136,8 @@ export function calculateAPR(mangoAccount: string): number {
   const newestValue = dailyValues[dailyValues.length - 1].portfolio_value;
   const startDate = new Date(dailyValues[0].date);
   const endDate = new Date(dailyValues[dailyValues.length - 1].date);
-  const daysPassed = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+  const daysPassed =
+    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
 
   const totalReturn = (newestValue - oldestValue) / oldestValue;
   const annualizedReturn = Math.pow(1 + totalReturn, 365 / daysPassed) - 1;
