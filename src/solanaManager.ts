@@ -29,6 +29,8 @@ import { saveMangoEvent } from "./db/mangoEvents";
 import { broadcastUpdate } from "./wsServer";
 import { toBase } from "./solana/amountParser";
 import { getTokenAccounts } from "./solana/fetcher/getTokenAccounts";
+import { getMints } from "./solana/fetcher/getMint";
+import BigNumber from "bignumber.js";
 
 interface GetBalancesQuery {
   user: string;
@@ -39,11 +41,11 @@ const getBalancesQuerySchema = t.Object({
 });
 
 interface GetBotDataQuery {
-  botId: string;
+  user: string;
 }
 
 const getBotDataQuerySchema = t.Object({
-  botId: t.String(),
+  user: t.String(),
 });
 
 interface DepositRequestBody {
@@ -85,18 +87,26 @@ export const solanaManager = new Elysia()
         const userInfo = await config.RPC.getAccountInfo(user);
         if (!userInfo)
           return {
-            error: "Ensure you have SOL and USDC on your wallet",
+            error: "Ensure you have SOL on your wallet",
             status: 404,
           };
 
         const tokenAccounts = await getTokenAccounts(user.toBase58());
         if (tokenAccounts.length === 0)
           return { message: "No token accounts found", status: 200 };
-        const balances = tokenAccounts.map((x) => ({
-          mint: x.pubkey,
-          balance: x.data.amount.toString(),
-        }));
 
+        const mints = await getMints(tokenAccounts.map((x) => new PublicKey(x.pubkey)));
+
+        const balances = tokenAccounts.map((x) => {
+          const mintData = mints[x.pubkey];
+          const decimals = mintData ? mintData.decimals : 0;
+          const balance = x.data.amount.dividedBy(new BigNumber(10).pow(decimals)).toString();
+          return {
+            mint: x.pubkey,
+            balance,
+          };
+        });
+  
         return { balances, status: 200 };
       } catch (e: any) {
         console.error(e.message);
@@ -110,14 +120,14 @@ export const solanaManager = new Elysia()
 
   .get(
     "/getBotData",
-    async ({ query }: { query: { userAddress: string } }) => {
+    async ({ query }: { query: GetBotDataQuery }) => {
       try {
-        const { userAddress } = query;
-        if (!userAddress) {
+        const { user } = query;
+        if (!user) {
           return { error: "User address is required", status: 400 };
         }
 
-        const userBotsData = getUserBotsData(userAddress);
+        const userBotsData = getUserBotsData(user);
         if (!userBotsData) {
           return { error: "No active bots found for this user", status: 404 };
         }
