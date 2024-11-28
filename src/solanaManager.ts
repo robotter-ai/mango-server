@@ -4,7 +4,10 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import {
+  createCloseAccountInstruction,
+  createInitializeAccount3Instruction,
   getAssociatedTokenAddressSync,
+  NATIVE_MINT,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { Elysia, t } from "elysia";
@@ -31,6 +34,7 @@ import { toBase } from "./solana/amountParser";
 import { getTokenAccounts } from "./solana/fetcher/getTokenAccounts";
 import { getMints } from "./solana/fetcher/getMint";
 import BigNumber from "bignumber.js";
+import { mintFromSymbol, symbolFromMint } from "./constants";
 
 interface GetBalancesQuery {
   user: string;
@@ -50,9 +54,9 @@ const getBotDataQuerySchema = t.Object({
 
 interface DepositRequestBody {
   owner: string;
-  balanceA: string;
+  balanceA: number;
   mintA: string;
-  balanceB: string;
+  balanceB: number;
   mintB: string;
   feesAmount: string;
   delegate: string;
@@ -60,9 +64,9 @@ interface DepositRequestBody {
 
 const depositBodySchema = t.Object({
   owner: t.String(),
-  balanceA: t.String(),
+  balanceA: t.Number(),
   mintA: t.String(),
-  balanceB: t.String(),
+  balanceB: t.Number(),
   mintB: t.String(),
   feesAmount: t.String(),
   delegate: t.String(),
@@ -148,8 +152,8 @@ export const solanaManager = new Elysia()
     async ({ body }: { body: DepositRequestBody }) => {
       const { owner, balanceA, mintA, balanceB, mintB, feesAmount, delegate } =
         body;
-      const amountA = toBase(balanceA, mintA);
-      const amountB = toBase(balanceB, mintB);
+      const amountA = toBase(balanceA.toString(), mintA);
+      const amountB = toBase(balanceB.toString(), mintB);
       const solAmount = toBase(feesAmount, "SOL");
 
       const ownerPubkey = new PublicKey(owner);
@@ -161,16 +165,6 @@ export const solanaManager = new Elysia()
         accountNumber,
       );
       const mangoGroup = getMangoGroup();
-      const bankA = mangoGroup.getFirstBankByMint(new PublicKey(mintA));
-      const bankB = mangoGroup.getFirstBankByMint(new PublicKey(mintB));
-      const tokenAccountA = getAssociatedTokenAddressSync(
-        new PublicKey(mintA),
-        ownerPubkey,
-      );
-      const tokenAccountB = getAssociatedTokenAddressSync(
-        new PublicKey(mintB),
-        ownerPubkey,
-      );
 
       try {
         const createAccountIx = await mangoClient.program.methods
@@ -198,9 +192,55 @@ export const solanaManager = new Elysia()
           lamports: solAmount,
         });
 
-        const instructions = [transferIx, createAccountIx, setDelegateIx];
+        const instructions = [createAccountIx, transferIx, setDelegateIx];
+
+        const mintAIsSol = new PublicKey(mintFromSymbol[mintA]).equals(NATIVE_MINT);
+        const mintBIsSol = new PublicKey(mintFromSymbol[mintB]).equals(NATIVE_MINT);
+        let wrappedSolAccounts: PublicKey[] = [];
 
         if (amountA > 0) {
+          const mintAddress = mintFromSymbol[mintA];
+          const mintPubkey = new PublicKey(mintAddress);
+          const bankA = mangoGroup.getFirstBankByMint(mintPubkey);
+          let tokenAccountA = getAssociatedTokenAddressSync(
+            new PublicKey(mintAddress),
+            ownerPubkey,
+          );
+
+          if (mintAIsSol) {
+            // Generate seed for wrapped SOL account
+            const seed = Math.random().toString(36).slice(2, 34);
+            const wrappedSolAccount = await PublicKey.createWithSeed(
+              ownerPubkey,
+              seed,
+              TOKEN_PROGRAM_ID
+            );
+            wrappedSolAccounts.push(wrappedSolAccount);
+        
+            // Create and initialize wrapped SOL account
+            const rentExemptLamports = await config.RPC.getMinimumBalanceForRentExemption(165);
+            const totalLamports = new BN(amountA).add(new BN(rentExemptLamports));
+        
+            instructions.push(
+              SystemProgram.createAccountWithSeed({
+                fromPubkey: ownerPubkey,
+                basePubkey: ownerPubkey,
+                seed,
+                newAccountPubkey: wrappedSolAccount,
+                lamports: totalLamports.toNumber(),
+                space: 165,
+                programId: TOKEN_PROGRAM_ID
+              }),
+              createInitializeAccount3Instruction(
+                wrappedSolAccount,
+                NATIVE_MINT,
+                ownerPubkey
+              )
+            );
+        
+            tokenAccountA = wrappedSolAccount;
+          }
+
           const depositIx = await mangoClient.program.methods
             .tokenDeposit(new BN(amountA), false)
             .accounts({
@@ -217,6 +257,47 @@ export const solanaManager = new Elysia()
         }
 
         if (amountB > 0) {
+          const mintAddress = mintFromSymbol[mintB];
+          const bankB = mangoGroup.getFirstBankByMint(new PublicKey(mintAddress));
+          let tokenAccountB = getAssociatedTokenAddressSync(
+            new PublicKey(mintAddress),
+            ownerPubkey,
+          );
+
+          if (mintBIsSol) {
+            // Generate seed for wrapped SOL account
+            const seed = Math.random().toString(36).slice(2, 34);
+            const wrappedSolAccount = await PublicKey.createWithSeed(
+              ownerPubkey,
+              seed,
+              TOKEN_PROGRAM_ID
+            );
+            wrappedSolAccounts.push(wrappedSolAccount);
+        
+            // Create and initialize wrapped SOL account
+            const rentExemptLamports = await config.RPC.getMinimumBalanceForRentExemption(165);
+            const totalLamports = new BN(amountB).add(new BN(rentExemptLamports));
+        
+            instructions.push(
+              SystemProgram.createAccountWithSeed({
+                fromPubkey: ownerPubkey,
+                basePubkey: ownerPubkey,
+                seed,
+                newAccountPubkey: wrappedSolAccount,
+                lamports: totalLamports.toNumber(),
+                space: 165,
+                programId: TOKEN_PROGRAM_ID
+              }),
+              createInitializeAccount3Instruction(
+                wrappedSolAccount,
+                NATIVE_MINT,
+                ownerPubkey
+              )
+            );
+        
+            tokenAccountB = wrappedSolAccount;
+          }
+
           const depositIxB = await mangoClient.program.methods
             .tokenDeposit(new BN(amountB), false)
             .accounts({
@@ -231,6 +312,16 @@ export const solanaManager = new Elysia()
             .instruction();
           instructions.push(depositIxB);
         }
+
+        wrappedSolAccounts.forEach(wrappedAccount => {
+          instructions.push(
+            createCloseAccountInstruction(
+              wrappedAccount,
+              ownerPubkey,
+              ownerPubkey
+            )
+          );
+        });
 
         const transaction = await prepareTransaction(instructions, ownerPubkey);
 
@@ -250,9 +341,6 @@ export const solanaManager = new Elysia()
         }
         return { message: "error", error: error.message, status: 500 };
       }
-    },
-    {
-      body: depositBodySchema,
     },
   )
 

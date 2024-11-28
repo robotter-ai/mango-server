@@ -2,7 +2,7 @@ import { Connection } from "@solana/web3.js";
 
 export const config = {
   HOST: process.env.HOST || "127.0.0.1",
-  PORT: process.env.PORT || "3000",
+  PORT: process.env.PORT || "3001",
   RPC: new Connection(
     `https://mainnet.helius-rpc.com/?api-key=${process.env.RPC_KEY!}`,
   ),
